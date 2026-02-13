@@ -19,8 +19,7 @@
 }
 
 .set-circle.completed {
-  background: #4a4a4a;
-  box-shadow: 0 0 0 2px #888;
+  background: #e74c3c;
 }
 
 .set-reps {
