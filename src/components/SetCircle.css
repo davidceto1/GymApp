@@ -1,0 +1,35 @@
+.set-circle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.set-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.set-circle.completed {
+  background: #4a4a4a;
+  box-shadow: 0 0 0 2px #888;
+}
+
+.set-reps {
+  color: #ccc;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.set-weight {
+  color: #999;
+  font-size: 13px;
+}

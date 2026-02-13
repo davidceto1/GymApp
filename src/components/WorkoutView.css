@@ -1,0 +1,53 @@
+.workout-view {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 20px;
+}
+
+.workout-header {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.workout-name {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  cursor: pointer;
+}
+
+.workout-name-input {
+  background: none;
+  border: none;
+  border-bottom: 1px solid #e74c3c;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  width: 100%;
+}
+
+.workout-divider {
+  height: 2px;
+  background: #e74c3c;
+  margin-bottom: 8px;
+}
+
+.add-exercise-btn {
+  background: #1a1a1a;
+  border: 1px dashed #444;
+  border-radius: 8px;
+  color: #999;
+  padding: 14px;
+  width: 100%;
+  cursor: pointer;
+  font-size: 15px;
+  margin-top: 12px;
+}
+
+.add-exercise-btn:hover {
+  border-color: #666;
+  color: #ccc;
+}

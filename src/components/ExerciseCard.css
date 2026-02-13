@@ -1,0 +1,40 @@
+.exercise-card {
+  padding: 16px 0;
+}
+
+.exercise-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.exercise-name {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.exercise-summary {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.exercise-summary .arrow {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.sets-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
