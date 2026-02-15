@@ -1,0 +1,76 @@
+.rest-timer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.rest-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.rest-timer-label {
+  color: #999;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.rest-timer-ring {
+  position: relative;
+  width: 180px;
+  height: 180px;
+}
+
+.rest-timer-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.rest-timer-track {
+  fill: none;
+  stroke: #333;
+  stroke-width: 4;
+}
+
+.rest-timer-progress {
+  fill: none;
+  stroke: #e74c3c;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.rest-timer-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 48px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-timer-skip {
+  background: none;
+  border: 1px solid #555;
+  border-radius: 20px;
+  color: #ccc;
+  padding: 8px 32px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.rest-timer-skip:hover {
+  border-color: #888;
+  color: #fff;
+}

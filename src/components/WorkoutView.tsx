@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Workout, Exercise } from '../types';
 import { ExerciseCard } from './ExerciseCard';
 import { EditModal } from './EditModal';
+import { RestTimer } from './RestTimer';
 import './WorkoutView.css';
 
 interface WorkoutViewProps {
@@ -14,9 +15,14 @@ export function WorkoutView({ workout, onUpdate }: WorkoutViewProps) {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(workout.name);
 
+  const [timerTrigger, setTimerTrigger] = useState(0);
+
   const editingExercise = workout.exercises.find(e => e.id === editingExerciseId);
 
   const toggleSet = (exerciseId: string, setIndex: number) => {
+    const exercise = workout.exercises.find(ex => ex.id === exerciseId);
+    const wasCompleted = exercise?.sets[setIndex]?.completed;
+
     onUpdate({
       ...workout,
       exercises: workout.exercises.map(ex =>
@@ -30,6 +36,11 @@ export function WorkoutView({ workout, onUpdate }: WorkoutViewProps) {
           : ex
       ),
     });
+
+    // Start rest timer only when completing a set (not when uncompleting)
+    if (!wasCompleted) {
+      setTimerTrigger(prev => prev + 1);
+    }
   };
 
   const updateExercise = (updated: Exercise) => {
@@ -114,6 +125,8 @@ export function WorkoutView({ workout, onUpdate }: WorkoutViewProps) {
           onClose={() => setEditingExerciseId(null)}
         />
       )}
+
+      <RestTimer trigger={timerTrigger} />
     </div>
   );
 }
