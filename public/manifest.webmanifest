@@ -1,0 +1,12 @@
+{
+  "name": "StrongLifts 5×5 Remake",
+  "short_name": "5×5",
+  "description": "StrongLifts-style 5×5 workout tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e0e10",
+  "theme_color": "#e53935",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

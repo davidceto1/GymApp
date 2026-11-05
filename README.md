@@ -1,73 +1,36 @@
-# React + TypeScript + Vite
+# GymApp — StrongLifts 5×5 remake
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A mobile-first web remake of the [StrongLifts 5×5](https://stronglifts.com/app/) workout app.
+React 19 + TypeScript + Vite, no backend: everything is stored in your browser.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **5×5 program**: Workout A (Squat, Bench, Row) and B (Squat, OHP, Deadlift 1×5), alternating automatically. 3×5 variant available.
+- **Tap-to-log sets**: tap a circle for 5 reps, tap again to count down a rep, tap at 0 to clear.
+- **Automatic progression**: +2.5 kg per successful session (+5 kg deadlift), weight repeats after a miss, 10% deload after 3 failed sessions in a row.
+- **Break deload**: offered when you come back after 2+ weeks off.
+- **Rest timer**: starts when you log a set; guides 1.5 min (easy), 3 min (hard) or 5 min (failed); beeps/vibrates.
+- **Warmup calculator** and **plate calculator** for every lift; change today's weight from the plate sheet.
+- **History** grouped by month, with notes, body weight and delete.
+- **Progress charts** per lift and for body weight, with best 5-rep, estimated 1RM and a table view.
+- **Settings**: kg/lb (with conversion), bar weight, plates, increments, rest times, deload rules, working weights.
+- **Backup**: export/import JSON, export history as CSV.
+- Light and dark themes, installable as a PWA.
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+npm install
+npm run dev     # start dev server
+npm test        # unit + component tests (vitest)
+npm run lint
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Code layout:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `src/logic/` – pure program rules (progression, deloads, warmups, plates, units)
+- `src/state/` – reducer for all state changes, localStorage persistence, import/export
+- `src/ui/` – screens and components
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+See [REMAKE_REPORT.md](REMAKE_REPORT.md) for the feature-by-feature status.
