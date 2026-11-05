@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polymarket Dashboard</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0f1117;
+      --bg-secondary: #1a1d27;
+      --bg-card: #1e2130;
+      --border: #2a2d3e;
+      --text-primary: #e8eaf0;
+      --text-secondary: #8b8fa8;
+      --text-muted: #555875;
+      --accent-yes: #00c07b;
+      --accent-no: #e84848;
+      --accent-blue: #4f8ef7;
+      --accent-blue-dim: rgba(79, 142, 247, 0.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-blue);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .logo h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .logo span {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .search-wrapper {
+      flex: 1;
+      max-width: 420px;
+      position: relative;
+    }
+
+    .search-wrapper svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    #searchInput {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.55rem 1rem 0.55rem 2.4rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #searchInput::placeholder {
+      color: var(--text-muted);
+    }
+
+    #searchInput:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .dot.live {
+      background: var(--accent-yes);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    main {
+      padding: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .stat-chip strong {
+      color: var(--text-primary);
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+
+    .card:hover {
+      border-color: rgba(79, 142, 247, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .card-question {
+      font-size: 0.925rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .prices-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .price-chip {
+      border-radius: var(--radius-sm);
+      padding: 0.55rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .price-chip.yes {
+      background: rgba(0, 192, 123, 0.1);
+      border: 1px solid rgba(0, 192, 123, 0.25);
+    }
+
+    .price-chip.no {
+      background: rgba(232, 72, 72, 0.1);
+      border: 1px solid rgba(232, 72, 72, 0.25);
+    }
+
+    .price-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .price-chip.yes .price-label { color: var(--accent-yes); }
+    .price-chip.no .price-label { color: var(--accent-no); }
+
+    .price-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .price-chip.yes .price-value { color: var(--accent-yes); }
+    .price-chip.no .price-value { color: var(--accent-no); }
+
+    .price-pct {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .meta-label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 500;
+    }
+
+    .meta-value {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .meta-value.highlight {
+      color: var(--accent-blue);
+    }
+
+    /* Loading skeleton */
+    .skeleton-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .skel {
+      background: linear-gradient(90deg, var(--border) 25%, #2f3250 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .skel-line { height: 14px; }
+    .skel-line.lg { height: 16px; }
+    .skel-line.sm { height: 11px; }
+    .skel-short { width: 60%; }
+    .skel-med { width: 80%; }
+
+    /* Error state */
+    .error-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .error-state .error-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .error-state h2 {
+      font-size: 1.1rem;
+      color: var(--accent-no);
+      margin-bottom: 0.5rem;
+    }
+
+    .error-state p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .retry-btn {
+      margin-top: 1.2rem;
+      background: var(--accent-blue-dim);
+      border: 1px solid var(--accent-blue);
+      color: var(--accent-blue);
+      padding: 0.5rem 1.2rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .retry-btn:hover {
+      background: rgba(79, 142, 247, 0.2);
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        flex-wrap: wrap;
+        padding: 1rem;
+      }
+      .search-wrapper {
+        max-width: 100%;
+        order: 3;
+        flex-basis: 100%;
+      }
+      main {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div>
+      <h1>Polymarket</h1>
+      <span>Markets Dashboard</span>
+    </div>
+  </div>
+
+  <div class="search-wrapper">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input type="text" id="searchInput" placeholder="Search markets..." autocomplete="off" />
+  </div>
+
+  <div class="status-bar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">Loading…</span>
+  </div>
+</header>
+
+<main>
+  <div class="stats-row" id="statsRow" style="display:none">
+    <div class="stat-chip">Showing <strong id="visibleCount">0</strong> of <strong id="totalCount">0</strong> markets</div>
+    <div class="stat-chip">Cache refreshes every <strong>30s</strong></div>
+  </div>
+
+  <div id="grid"></div>
+</main>
+
+<script>
+  const grid = document.getElementById('grid');
+  const searchInput = document.getElementById('searchInput');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const statsRow = document.getElementById('statsRow');
+  const visibleCount = document.getElementById('visibleCount');
+  const totalCount = document.getElementById('totalCount');
+
+  let allMarkets = [];
+
+  function fmt(val, decimals = 2) {
+    if (val == null || isNaN(val)) return '—';
+    const n = parseFloat(val);
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return '$' + (n / 1_000).toFixed(1) + 'K';
+    return '$' + n.toFixed(decimals);
+  }
+
+  function fmtDate(dateStr) {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d)) return '—';
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return '—'; }
+  }
+
+  function parsePrice(raw) {
+    if (raw == null) return null;
+    // outcomePrices can be a JSON-encoded string like "[\"0.72\", \"0.28\"]"
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    return Array.isArray(raw) ? raw : null;
+  }
+
+  function toPercent(val) {
+    if (val == null) return null;
+    const n = parseFloat(val);
+    if (isNaN(n)) return null;
+    return (n * 100).toFixed(0) + '%';
+  }
+
+  function renderSkeletons(count = 8) {
+    grid.innerHTML = Array.from({ length: count }, () => `
+      <div class="skeleton-card">
+        <div class="skel skel-line lg skel-med"></div>
+        <div class="skel skel-line sm skel-short" style="margin-top:-0.5rem"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+          <div class="skel" style="height:60px;border-radius:8px"></div>
+          <div class="skel" style="height:60px;border-radius:8px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;padding-top:0.5rem">
+          <div class="skel skel-line sm" style="width:70%"></div>
+          <div class="skel skel-line sm" style="width:55%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderMarkets(markets) {
+    if (!markets.length) {
+      grid.innerHTML = `<div class="empty-state">No markets match your search.</div>`;
+      visibleCount.textContent = 0;
+      return;
+    }
+
+    visibleCount.textContent = markets.length;
+
+    grid.innerHTML = markets.map(m => {
+      const prices = parsePrice(m.outcomePrices);
+      const outcomes = Array.isArray(m.outcomes) ? m.outcomes : ['YES', 'NO'];
+
+      const yesLabel = outcomes[0] ?? 'YES';
+      const noLabel = outcomes[1] ?? 'NO';
+      const yesPrice = prices ? prices[0] : null;
+      const noPrice = prices ? prices[1] : null;
+      const yesPct = toPercent(yesPrice);
+      const noPct = toPercent(noPrice);
+
+      const yesRaw = yesPrice != null ? parseFloat(yesPrice) : null;
+      const noRaw = noPrice != null ? parseFloat(noPrice) : null;
+
+      return `
+        <div class="card">
+          <div class="card-question" title="${escHtml(m.question)}">${escHtml(m.question)}</div>
+          <div class="prices-row">
+            <div class="price-chip yes">
+              <span class="price-label">${escHtml(yesLabel)}</span>
+              <span class="price-value">${yesPct ?? '—'}</span>
+              <span class="price-pct">${yesRaw != null ? '¢' + (yesRaw * 100).toFixed(1) : ''}</span>
+            </div>
+            <div class="price-chip no">
+              <span class="price-label">${escHtml(noLabel)}</span>
+              <span class="price-value">${noPct ?? '—'}</span>
+              <span class="price-pct">${noRaw != null ? '¢' + (noRaw * 100).toFixed(1) : ''}</span>
+            </div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-item">
+              <span class="meta-label">Volume</span>
+              <span class="meta-value highlight">${fmt(m.volume)}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Liquidity</span>
+              <span class="meta-value">${fmt(m.liquidity)}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">End Date</span>
+              <span class="meta-value">${fmtDate(m.endDate)}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Status</span>
+              <span class="meta-value" style="color:${m.active && !m.closed ? 'var(--accent-yes)' : 'var(--text-muted)'}">
+                ${m.active && !m.closed ? 'Active' : m.closed ? 'Closed' : 'Inactive'}
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function filterAndRender() {
+    const q = searchInput.value.trim().toLowerCase();
+    const filtered = q
+      ? allMarkets.filter(m => m.question?.toLowerCase().includes(q))
+      : allMarkets;
+    renderMarkets(filtered);
+  }
+
+  async function fetchMarkets() {
+    renderSkeletons();
+    statusDot.classList.remove('live');
+    statusText.textContent = 'Loading…';
+    statsRow.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/markets');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      allMarkets = await res.json();
+
+      totalCount.textContent = allMarkets.length;
+      statsRow.style.display = 'flex';
+      statusDot.classList.add('live');
+      statusText.textContent = `${allMarkets.length} markets`;
+
+      filterAndRender();
+    } catch (err) {
+      console.error('Failed to fetch markets:', err);
+      statusDot.classList.remove('live');
+      statusText.textContent = 'Error';
+      grid.innerHTML = `
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h2>Failed to load markets</h2>
+          <p>${escHtml(err.message)}</p>
+          <button class="retry-btn" onclick="fetchMarkets()">Retry</button>
+        </div>
+      `;
+    }
+  }
+
+  searchInput.addEventListener('input', filterAndRender);
+
+  fetchMarkets();
+</script>
+</body>
+</html>
