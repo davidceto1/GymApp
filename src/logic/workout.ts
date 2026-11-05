@@ -1,6 +1,16 @@
-import type { AppState, ExerciseId, LiftState, LoggedSet, SessionExercise, Settings, Workout, WorkoutType } from '../types';
-import { PROGRAM, REPS_PER_SET, setCountFor } from './program';
-import { roundLoadable } from './weights';
+import type {
+  AppState,
+  Equipment,
+  ExerciseDef,
+  LiftState,
+  LoggedSet,
+  SessionExercise,
+  Settings,
+  Workout,
+  WorkoutType,
+} from '../types';
+import { startWeight } from './program';
+import { roundLoadable, roundTo } from './weights';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -10,25 +20,39 @@ export function newId(): string {
     : Math.random().toString(36).slice(2);
 }
 
-export function createWorkout(
-  type: WorkoutType,
-  lifts: Record<ExerciseId, LiftState>,
+type ProgramState = Pick<AppState, 'program' | 'exercises' | 'lifts' | 'settings'>;
+
+/** Round to a weight you can actually use: plate-loadable for barbells, the increment otherwise. */
+export function roundForExercise(
+  value: number,
+  equipment: Equipment,
+  increment: number,
   settings: Settings,
-): Workout {
+): number {
+  if (equipment === 'barbell') return roundLoadable(value, settings);
+  return Math.max(0, roundTo(value, increment > 0 ? increment : 1));
+}
+
+export function createWorkout(type: WorkoutType, state: ProgramState): Workout {
+  const { program, exercises, lifts, settings } = state;
   return {
     id: newId(),
     type,
     unit: settings.unit,
     startedAt: null,
     finishedAt: null,
-    exercises: PROGRAM[type].map(id => ({
-      id,
-      weight: lifts[id].weight,
-      sets: Array.from({ length: setCountFor(id, settings.program) }, () => ({
-        target: REPS_PER_SET,
-        reps: null,
-      })),
-    })),
+    exercises: program[type]
+      .filter(id => exercises[id])
+      .map(id => {
+        const def = exercises[id];
+        return {
+          id,
+          name: def.name,
+          equipment: def.equipment,
+          weight: lifts[id]?.weight ?? startWeight(def.equipment, settings),
+          sets: Array.from({ length: def.sets }, () => ({ target: def.reps, reps: null })),
+        };
+      }),
     note: '',
     bodyWeight: null,
     rest: null,
@@ -64,19 +88,20 @@ export function isWorkoutComplete(workout: Workout): boolean {
 
 /** Compute next-session lift state for one exercise. */
 export function progressLift(
-  lift: LiftState,
+  lift: LiftState | undefined,
   ex: SessionExercise,
+  def: ExerciseDef,
   settings: Settings,
-): LiftState {
+): LiftState | undefined {
   const outcome = exerciseOutcome(ex);
   if (outcome === 'skipped') return lift;
   if (outcome === 'success') {
-    return { weight: ex.weight + settings.increments[ex.id], failures: 0 };
+    return { weight: ex.weight + def.increment, failures: 0 };
   }
-  const failures = (ex.weight === lift.weight ? lift.failures : 0) + 1;
+  const failures = (lift && ex.weight === lift.weight ? lift.failures : 0) + 1;
   if (failures >= settings.failuresBeforeDeload) {
     return {
-      weight: roundLoadable(ex.weight * (1 - settings.deloadPercent / 100), settings),
+      weight: roundForExercise(ex.weight * (1 - settings.deloadPercent / 100), def.equipment, def.increment, settings),
       failures: 0,
     };
   }
@@ -88,7 +113,10 @@ export function finishWorkout(state: AppState, now: number): AppState {
   if (!hasLoggedSets(current)) return state;
   const lifts = { ...state.lifts };
   for (const ex of current.exercises) {
-    lifts[ex.id] = progressLift(lifts[ex.id], ex, settings);
+    const def = state.exercises[ex.id];
+    if (!def) continue;
+    const next = progressLift(lifts[ex.id], ex, def, settings);
+    if (next) lifts[ex.id] = next;
   }
   const finished: Workout = {
     ...current,
@@ -102,7 +130,7 @@ export function finishWorkout(state: AppState, now: number): AppState {
     lifts,
     nextType,
     history: [finished, ...state.history],
-    current: createWorkout(nextType, lifts, settings),
+    current: createWorkout(nextType, { ...state, lifts }),
   };
 }
 
@@ -116,18 +144,4 @@ export function daysSinceLastWorkout(history: Workout[], now: number): number | 
 export function breakDeloadPercent(days: number | null): number {
   if (days == null || days < 14) return 0;
   return Math.min(30, Math.floor(days / 14) * 10);
-}
-
-export function applyDeloadToWorkout(workout: Workout, percent: number, settings: Settings): Workout {
-  return {
-    ...workout,
-    exercises: workout.exercises.map(ex => ({
-      ...ex,
-      weight: roundLoadable(ex.weight * (1 - percent / 100), settings),
-    })),
-  };
-}
-
-export function restTarget(settings: Settings, failed: boolean): number {
-  return failed ? settings.restFailed : settings.restEasy;
 }

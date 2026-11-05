@@ -1,14 +1,14 @@
 import { useRef, useState, type Dispatch } from 'react';
 import type { AppState, Settings } from '../types';
 import type { Action } from '../state/reducer';
-import { EXERCISE_IDS, EXERCISE_NAMES } from '../logic/program';
+import { WorkoutEditor } from './WorkoutEditor';
 import { formatWeight } from '../logic/weights';
 import { historyToCsv, parseState } from '../state/storage';
 import { NumberField } from './common';
 import { downloadFile, readText } from './format';
 
 export function SettingsScreen({ state, dispatch }: { state: AppState; dispatch: Dispatch<Action> }) {
-  const { settings, lifts } = state;
+  const { settings } = state;
   const u = settings.unit;
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -48,8 +48,9 @@ export function SettingsScreen({ state, dispatch }: { state: AppState; dispatch:
     <div className="screen settings">
       <header className="screen-header"><h1>Settings</h1></header>
 
+      <WorkoutEditor state={state} dispatch={dispatch} />
+
       <section className="card">
-        <h2 className="card-title">Program</h2>
         <div className="setting-row">
           <span>Units</span>
           <div className="segmented" role="radiogroup" aria-label="Units">
@@ -57,29 +58,6 @@ export function SettingsScreen({ state, dispatch }: { state: AppState; dispatch:
               <button key={unit} role="radio" aria-checked={u === unit} onClick={() => dispatch({ type: 'setUnit', unit })}>{unit}</button>
             ))}
           </div>
-        </div>
-        <div className="setting-row">
-          <span>Sets × reps</span>
-          <div className="segmented" role="radiogroup" aria-label="Program variant">
-            {(['5x5', '3x5'] as const).map(p => (
-              <button key={p} role="radio" aria-checked={settings.program === p} onClick={() => update({ program: p })}>{p.replace('x', '×')}</button>
-            ))}
-          </div>
-        </div>
-        <p className="muted small">Deadlift is always 1×5. Changes apply from the next workout you haven't started.</p>
-      </section>
-
-      <section className="card">
-        <h2 className="card-title">Working weights & increments ({u})</h2>
-        <div className="lift-grid">
-          <span className="muted small">Lift</span><span className="muted small">Next weight</span><span className="muted small">+ per success</span>
-          {EXERCISE_IDS.map(id => (
-            <div key={id} className="lift-grid-row">
-              <span>{EXERCISE_NAMES[id]}{lifts[id].failures > 0 && <span className="tag failed">{lifts[id].failures}× failed</span>}</span>
-              <NumberField label={`${EXERCISE_NAMES[id]} weight`} value={lifts[id].weight} step={0.5} onCommit={v => v != null && dispatch({ type: 'setLift', id, lift: { weight: v, failures: 0 } })} />
-              <NumberField label={`${EXERCISE_NAMES[id]} increment`} value={settings.increments[id]} step={0.25} onCommit={v => v != null && update({ increments: { ...settings.increments, [id]: v } })} />
-            </div>
-          ))}
         </div>
       </section>
 

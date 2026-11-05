@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defaultLifts, defaultSettings, setCountFor } from './program';
+import { DEFAULT_PROGRAM, defaultExercises, defaultLifts, defaultSettings } from './program';
 import {
   convertWeight,
   plateBreakdown,
@@ -13,24 +13,30 @@ import {
   exerciseOutcome,
   nextReps,
   progressLift,
+  roundForExercise,
 } from './workout';
-import type { SessionExercise } from '../types';
+import type { ExerciseDef, SessionExercise } from '../types';
 
 const kg = defaultSettings('kg');
+const defs = defaultExercises('kg');
+const programState = { program: DEFAULT_PROGRAM, exercises: defs, lifts: defaultLifts('kg'), settings: kg };
 
-function ex(id: SessionExercise['id'], weight: number, reps: (number | null)[]): SessionExercise {
-  return { id, weight, sets: reps.map(r => ({ target: 5, reps: r })) };
+function ex(id: string, weight: number, reps: (number | null)[]): SessionExercise {
+  return { id, name: id, equipment: 'barbell', weight, sets: reps.map(r => ({ target: 5, reps: r })) };
 }
+
+const dips: ExerciseDef = { id: 'dips', name: 'Dips', sets: 3, reps: 8, increment: 2, equipment: 'other' };
 
 describe('program', () => {
   it('builds workout A as squat/bench/row 5×5', () => {
-    const w = createWorkout('A', defaultLifts('kg'), kg);
+    const w = createWorkout('A', programState);
     expect(w.exercises.map(e => e.id)).toEqual(['squat', 'bench', 'row']);
+    expect(w.exercises.map(e => e.name)).toEqual(['Squat', 'Bench Press', 'Barbell Row']);
     expect(w.exercises.every(e => e.sets.length === 5 && e.sets.every(s => s.target === 5))).toBe(true);
   });
 
   it('builds workout B with deadlift 1×5', () => {
-    const w = createWorkout('B', defaultLifts('kg'), kg);
+    const w = createWorkout('B', programState);
     expect(w.exercises.map(e => e.id)).toEqual(['squat', 'ohp', 'deadlift']);
     expect(w.exercises[2].sets).toHaveLength(1);
   });
@@ -42,9 +48,20 @@ describe('program', () => {
     expect(defaultLifts('lb').squat.weight).toBe(45);
   });
 
-  it('supports the 3×5 variant', () => {
-    expect(setCountFor('squat', '3x5')).toBe(3);
-    expect(setCountFor('deadlift', '3x5')).toBe(1);
+  it('builds custom workouts with per-exercise sets and reps', () => {
+    const w = createWorkout('A', {
+      ...programState,
+      exercises: { ...defs, dips },
+      program: { A: ['dips', 'squat'], B: ['deadlift'] },
+    });
+    expect(w.exercises.map(e => e.id)).toEqual(['dips', 'squat']);
+    expect(w.exercises[0]).toMatchObject({ name: 'Dips', equipment: 'other', weight: 0 });
+    expect(w.exercises[0].sets).toEqual(Array(3).fill({ target: 8, reps: null }));
+  });
+
+  it('skips program entries whose exercise no longer exists', () => {
+    const w = createWorkout('A', { ...programState, program: { A: ['gone', 'squat'], B: ['squat'] } });
+    expect(w.exercises.map(e => e.id)).toEqual(['squat']);
   });
 });
 
@@ -63,31 +80,43 @@ describe('set tapping', () => {
 describe('progression', () => {
   it('adds the increment after a successful session', () => {
     const lift = { weight: 60, failures: 0 };
-    expect(progressLift(lift, ex('squat', 60, [5, 5, 5, 5, 5]), kg)).toEqual({ weight: 62.5, failures: 0 });
-    expect(progressLift({ weight: 100, failures: 0 }, ex('deadlift', 100, [5]), kg).weight).toBe(105);
+    expect(progressLift(lift, ex('squat', 60, [5, 5, 5, 5, 5]), defs.squat, kg)).toEqual({ weight: 62.5, failures: 0 });
+    expect(progressLift({ weight: 100, failures: 0 }, ex('deadlift', 100, [5]), defs.deadlift, kg)?.weight).toBe(105);
   });
 
   it('repeats the weight after a failed session', () => {
-    expect(progressLift({ weight: 60, failures: 0 }, ex('bench', 60, [5, 5, 5, 4, 3]), kg)).toEqual({ weight: 60, failures: 1 });
+    expect(progressLift({ weight: 60, failures: 0 }, ex('bench', 60, [5, 5, 5, 4, 3]), defs.bench, kg)).toEqual({ weight: 60, failures: 1 });
   });
 
   it('deloads 10% after the third consecutive failure, rounded to plates', () => {
-    expect(progressLift({ weight: 62.5, failures: 2 }, ex('bench', 62.5, [5, 5, 4, 4, 4]), kg)).toEqual({ weight: 57.5, failures: 0 });
+    expect(progressLift({ weight: 62.5, failures: 2 }, ex('bench', 62.5, [5, 5, 4, 4, 4]), defs.bench, kg)).toEqual({ weight: 57.5, failures: 0 });
   });
 
   it('resets the failure count when the weight was changed manually', () => {
-    expect(progressLift({ weight: 60, failures: 2 }, ex('bench', 55, [5, 4, 4, 4, 4]), kg)).toEqual({ weight: 55, failures: 1 });
+    expect(progressLift({ weight: 60, failures: 2 }, ex('bench', 55, [5, 4, 4, 4, 4]), defs.bench, kg)).toEqual({ weight: 55, failures: 1 });
   });
 
   it('treats unlogged exercises as skipped and partially logged as failed', () => {
     expect(exerciseOutcome(ex('row', 40, [null, null, null, null, null]))).toBe('skipped');
     expect(exerciseOutcome(ex('row', 40, [5, 5, null, null, null]))).toBe('failed');
     const lift = { weight: 40, failures: 1 };
-    expect(progressLift(lift, ex('row', 40, [null, null, null, null, null]), kg)).toBe(lift);
+    expect(progressLift(lift, ex('row', 40, [null, null, null, null, null]), defs.row, kg)).toBe(lift);
   });
 
   it('never deloads below the empty bar', () => {
-    expect(progressLift({ weight: 20, failures: 2 }, ex('ohp', 20, [3, 3, 3, 3, 3]), kg).weight).toBe(20);
+    expect(progressLift({ weight: 20, failures: 2 }, ex('ohp', 20, [3, 3, 3, 3, 3]), defs.ohp, kg)?.weight).toBe(20);
+  });
+
+  it('progresses and deloads non-barbell exercises by their own increment', () => {
+    const session = { ...ex('dips', 10, [8, 8, 8]), equipment: 'other' as const };
+    session.sets = session.sets.map(s => ({ ...s, target: 8 }));
+    expect(progressLift({ weight: 10, failures: 0 }, session, dips, kg)).toEqual({ weight: 12, failures: 0 });
+    const failed = { ...session, sets: session.sets.map(s => ({ ...s, reps: 6 })) };
+    // 10 × 0.9 = 9, which rounds to the nearest 2 kg step: 10.
+    expect(progressLift({ weight: 10, failures: 2 }, failed, dips, kg)).toEqual({ weight: 10, failures: 0 });
+    expect(roundForExercise(8.6, 'other', 2, kg)).toBe(8);
+    expect(roundForExercise(-3, 'other', 2, kg)).toBe(0);
+    expect(roundForExercise(8.6, 'barbell', 2, kg)).toBe(20);
   });
 });
 
@@ -102,7 +131,7 @@ describe('break deload', () => {
 
   it('measures days since the newest finished workout', () => {
     const day = 86_400_000;
-    const w = { ...createWorkout('A', defaultLifts(), kg), finishedAt: 0 };
+    const w = { ...createWorkout('A', programState), finishedAt: 0 };
     expect(daysSinceLastWorkout([w], 15 * day)).toBe(15);
     expect(daysSinceLastWorkout([], 15 * day)).toBeNull();
   });

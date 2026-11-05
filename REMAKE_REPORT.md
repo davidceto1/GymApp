@@ -9,10 +9,10 @@ StrongLifts 5×5 program rules. It was never compared side by side with the real
 
 ## Status: REMAKE COMPLETE
 
-All 19 checklist items are implemented and verified (2026-11-05):
+All 20 checklist items are implemented and verified (last updated 2026-11-05, workout editor added):
 
 - `npm run lint` passes with 0 problems.
-- `npm test`: 45 tests pass in 3 files (`src/logic/logic.test.ts`, `src/state/state.test.ts`, `src/App.test.tsx`).
+- `npm test`: 59 tests pass in 3 files (`src/logic/logic.test.ts`, `src/state/state.test.ts`, `src/App.test.tsx`).
 - `npm run build` passes.
 - An end-to-end run in real Microsoft Edge (headless, 375 px phone viewport) passed. It covered a full workout, persistence after reload, a 3-failure deload, CSV download and the plate sheet, with no page errors.
 - Screenshots at 390 px width were checked in dark and light mode for every screen: no horizontal overflow, no layout collisions.
@@ -35,11 +35,12 @@ All 19 checklist items are implemented and verified (2026-11-05):
 | 12 | Notes & body weight | Per-workout note and body weight entry. | DONE | App: "lists finished workouts in history with details" |
 | 13 | History | Past workouts grouped by month, missed/skipped tags, expandable details, delete. | DONE | App: "lists finished workouts in history with details and delete"; state: "deletes workouts" |
 | 14 | Progress charts | Per-lift weight-over-time chart and body-weight chart; next weight, best 5-rep, est. 1RM, sessions; hover tooltip; table view. | DONE | App: "charts progress per lift and body weight"; screenshots |
-| 15 | Settings | kg/lb with conversion, bar weight, plates, rest times, increments, deload %, failures before deload, 5×5 / 3×5, sound. | DONE | state: "converts weights when changing units", "rebuilds an untouched workout when switching to 3×5"; App: settings tests |
+| 15 | Settings | kg/lb with conversion, bar weight, plates, rest times, deload %, failures before deload, sound. | DONE | state: "converts weights when changing units"; App: settings tests |
 | 16 | Backup | Export and import JSON (validated), export CSV. | DONE | state: "rejects malformed imports", "exports history as CSV"; App: "imports a backup and rejects bad files"; E2E CSV download |
 | 17 | Persistence | All state saved in localStorage; survives reload; corrupt data falls back safely. | DONE | state: "round-trips through localStorage", "falls back to a fresh state on corrupt storage"; E2E reload |
 | 18 | Mobile-first UI | Dark/light StrongLifts-style UI, bottom tab bar, works at phone width; installable (manifest + icon). | DONE | screenshots in dark and light mode, overflow check |
 | 19 | Quality gates | Tests, lint and production build pass; CI runs lint + test + build. | DONE | commands above; `.github/workflows/ci.yml` |
+| 20 | Workout editor | Add, remove and reorder exercises in A and B; custom exercises (barbell or dumbbell/bodyweight) with their own sets, reps, weight and increment; 5×5 / 3×5 presets; old saves migrate automatically; history keeps exercise names after renames. | DONE | logic: "builds custom workouts…", "progresses and deloads non-barbell exercises…"; state: "workout editor" suite, "migrates version 1 saves"; App: "Workout editor" suite; E2E in Edge with a migrated version 1 save |
 
 ## Out of scope
 
@@ -47,6 +48,6 @@ These features of the commercial app are not in this remake:
 
 - Apple Watch / Wear OS apps and Health/Google Fit sync
 - Cloud accounts and sync across devices (data is per browser; use Export/Import to move it)
-- Paid "Pro" extras: accessory/assistance exercises, other programs (e.g. Madcow), custom workouts
+- Paid "Pro" extras: other programs (e.g. Madcow) and more than two workout days (custom exercises in A/B are supported)
 - A monthly calendar view (history is a month-grouped list instead)
 - Push notifications while the app is closed (alerts only fire while the page is open)

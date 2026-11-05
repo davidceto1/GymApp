@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SessionExercise, Settings } from '../types';
-import { EXERCISE_NAMES } from '../logic/program';
 import { formatWeight, warmupSets } from '../logic/weights';
+import { formatLoad } from './format';
 
 interface ExerciseCardProps {
   exercise: SessionExercise;
@@ -13,8 +13,9 @@ interface ExerciseCardProps {
 export function ExerciseCard({ exercise, settings, onTapSet, onOpenWeight }: ExerciseCardProps) {
   const [tab, setTab] = useState<'work' | 'warmup'>('work');
   const [warmupDone, setWarmupDone] = useState<boolean[]>([]);
-  const name = EXERCISE_NAMES[exercise.id];
-  const warmups = warmupSets(exercise.weight, settings);
+  const name = exercise.name;
+  const barbell = exercise.equipment === 'barbell';
+  const warmups = barbell ? warmupSets(exercise.weight, settings) : [];
   const target = exercise.sets[0]?.target ?? 5;
   const u = settings.unit;
 
@@ -23,18 +24,20 @@ export function ExerciseCard({ exercise, settings, onTapSet, onOpenWeight }: Exe
       <header className="exercise-header">
         <h2 className="exercise-name">{name}</h2>
         <button className="exercise-weight" onClick={onOpenWeight} aria-label={`${name} weight and plates`}>
-          {exercise.sets.length}×{target} {formatWeight(exercise.weight)}{u} <span aria-hidden="true">›</span>
+          {exercise.sets.length}×{target} {formatLoad(exercise.weight, u, exercise.equipment)} <span aria-hidden="true">›</span>
         </button>
       </header>
 
-      <div className="tabs small" role="tablist">
-        <button role="tab" aria-selected={tab === 'work'} onClick={() => setTab('work')}>Work sets</button>
-        <button role="tab" aria-selected={tab === 'warmup'} onClick={() => setTab('warmup')}>
-          Warmup{warmups.length ? ` (${warmups.length})` : ''}
-        </button>
-      </div>
+      {barbell && (
+        <div className="tabs small" role="tablist">
+          <button role="tab" aria-selected={tab === 'work'} onClick={() => setTab('work')}>Work sets</button>
+          <button role="tab" aria-selected={tab === 'warmup'} onClick={() => setTab('warmup')}>
+            Warmup{warmups.length ? ` (${warmups.length})` : ''}
+          </button>
+        </div>
+      )}
 
-      {tab === 'work' ? (
+      {tab === 'work' || !barbell ? (
         <div className="sets-row">
           {exercise.sets.map((set, i) => {
             const state = set.reps === null ? 'empty' : set.reps >= set.target ? 'done' : 'failed';
