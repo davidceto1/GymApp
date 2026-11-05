@@ -1,3 +1,5 @@
+import { formatWeight } from '../logic/weights';
+
 export function formatClock(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
@@ -36,4 +38,9 @@ export function readText(file: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('Could not read file'));
     reader.readAsText(file);
   });
+}
+
+/** "60kg", or "BW" for a bodyweight-only (non-barbell, 0 weight) exercise. */
+export function formatLoad(weight: number, unit: string, equipment: 'barbell' | 'other'): string {
+  return equipment === 'other' && weight === 0 ? 'BW' : `${formatWeight(weight)}${unit}`;
 }

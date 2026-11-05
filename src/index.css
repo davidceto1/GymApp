@@ -184,11 +184,26 @@ textarea.input { resize: vertical; }
 .segmented { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
 .segmented button { padding: 6px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; color: var(--muted); }
 .segmented button[aria-checked='true'] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
-.lift-grid { display: grid; grid-template-columns: 1fr 88px 88px; gap: 8px; align-items: center; }
-.lift-grid-row { display: contents; }
-.lift-grid .input { padding: 8px; text-align: right; }
 .switch { width: 22px; height: 22px; accent-color: var(--accent); }
 
 input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Workout editor */
+.card-title-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.card-title-row .card-title { margin-bottom: 0; }
+.editor-list { list-style: none; margin-bottom: 12px; }
+.editor-list li { display: flex; align-items: center; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.editor-item { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; padding: 2px 0; }
+.editor-name { font-weight: 600; }
+.editor-actions { display: flex; flex-shrink: 0; }
+.wide-block { width: 100%; margin-bottom: 12px; }
+.button-row + .muted, .card > .muted.small { margin-bottom: 10px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.form-grid .field { margin-bottom: 0; }
+.form-grid .span-2 { grid-column: span 2; }
+.form-grid .segmented { align-self: flex-start; }
+.pick-list { list-style: none; }
+.pick-list li { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); }
+.pick-item { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 0; text-align: left; }

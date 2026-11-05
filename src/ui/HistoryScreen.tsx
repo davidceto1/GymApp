@@ -1,10 +1,9 @@
 import { useState, type Dispatch } from 'react';
 import type { AppState, Workout } from '../types';
 import type { Action } from '../state/reducer';
-import { EXERCISE_NAMES } from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import { exerciseOutcome } from '../logic/workout';
-import { formatClock, formatDate } from './format';
+import { formatClock, formatDate, formatLoad } from './format';
 
 function monthKey(ms: number): string {
   return formatDate(ms, { month: 'long', year: 'numeric' });
@@ -31,7 +30,7 @@ function WorkoutCard({ workout, onDelete }: { workout: Workout; onDelete: () => 
             const outcome = exerciseOutcome(ex);
             return (
               <span key={ex.id} className={`history-line ${outcome}`}>
-                {EXERCISE_NAMES[ex.id]} {ex.sets.length}×{ex.sets[0]?.target} {formatWeight(ex.weight)}{workout.unit}
+                {ex.name} {ex.sets.length}×{ex.sets[0]?.target} {formatLoad(ex.weight, workout.unit, ex.equipment)}
                 {outcome === 'failed' && <span className="tag failed">missed reps</span>}
                 {outcome === 'skipped' && <span className="tag">skipped</span>}
               </span>
@@ -43,7 +42,7 @@ function WorkoutCard({ workout, onDelete }: { workout: Workout; onDelete: () => 
         <div className="history-detail">
           {workout.exercises.map(ex => (
             <p key={ex.id}>
-              <span className="muted">{EXERCISE_NAMES[ex.id]}:</span> {ex.sets.map(s => s.reps ?? '–').join(' / ')}
+              <span className="muted">{ex.name}:</span> {ex.sets.map(s => s.reps ?? '–').join(' / ')}
             </p>
           ))}
           {workout.bodyWeight != null && <p><span className="muted">Body weight:</span> {formatWeight(workout.bodyWeight)} {workout.unit}</p>}

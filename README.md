@@ -5,7 +5,8 @@ React 19 + TypeScript + Vite, no backend: everything is stored in your browser.
 
 ## Features
 
-- **5×5 program**: Workout A (Squat, Bench, Row) and B (Squat, OHP, Deadlift 1×5), alternating automatically. 3×5 variant available.
+- **5×5 program**: Workout A (Squat, Bench, Row) and B (Squat, OHP, Deadlift 1×5), alternating automatically. 3×5 preset available.
+- **Workout editor** (Settings → Workouts): add, remove and reorder exercises in A and B, create custom exercises (barbell or dumbbell/bodyweight), and set sets, reps, weight and increment per exercise.
 - **Tap-to-log sets**: tap a circle for 5 reps, tap again to count down a rep, tap at 0 to clear.
 - **Automatic progression**: +2.5 kg per successful session (+5 kg deadlift), weight repeats after a miss, 10% deload after 3 failed sessions in a row.
 - **Break deload**: offered when you come back after 2+ weeks off.
@@ -13,7 +14,7 @@ React 19 + TypeScript + Vite, no backend: everything is stored in your browser.
 - **Warmup calculator** and **plate calculator** for every lift; change today's weight from the plate sheet.
 - **History** grouped by month, with notes, body weight and delete.
 - **Progress charts** per lift and for body weight, with best 5-rep, estimated 1RM and a table view.
-- **Settings**: kg/lb (with conversion), bar weight, plates, increments, rest times, deload rules, working weights.
+- **Settings**: kg/lb (with conversion), bar weight, plates, rest times, deload rules.
 - **Backup**: export/import JSON, export history as CSV.
 - Light and dark themes, installable as a PWA.
 

@@ -1,13 +1,24 @@
-import type { AppState, ExerciseId, LiftState, Settings, Unit, Workout, WorkoutType } from '../types';
-import { EXERCISE_IDS, defaultLifts, defaultSettings, unitDefaults } from '../logic/program';
-import { convertWeight, roundLoadable } from '../logic/weights';
+import type { AppState, ExerciseDef, ExerciseId, LiftState, Settings, Unit, Workout, WorkoutType } from '../types';
+import {
+  BUILT_IN_IDS,
+  DEFAULT_PROGRAM,
+  defaultExercises,
+  defaultLifts,
+  defaultSettings,
+  startWeight,
+  unitDefaults,
+} from '../logic/program';
+import { convertWeight } from '../logic/weights';
 import {
   createWorkout,
   finishWorkout,
   hasLoggedSets,
   isSetFailed,
   nextReps,
+  roundForExercise,
 } from '../logic/workout';
+
+export type Preset = '5x5' | '3x5';
 
 export type Action =
   | { type: 'tapSet'; exercise: number; set: number; now: number }
@@ -24,30 +35,35 @@ export type Action =
   | { type: 'updateSettings'; settings: Partial<Omit<Settings, 'unit'>> }
   | { type: 'setUnit'; unit: Unit }
   | { type: 'setLift'; id: ExerciseId; lift: Partial<LiftState> }
+  /** Create or update an exercise; `weight` sets its next working weight. */
+  | { type: 'saveExercise'; exercise: ExerciseDef; weight?: number }
+  | { type: 'deleteExercise'; id: ExerciseId }
+  | { type: 'setProgram'; workout: WorkoutType; ids: ExerciseId[] }
+  | { type: 'applyPreset'; preset: Preset }
   | { type: 'import'; state: AppState }
   | { type: 'resetAll' };
 
 export function initialState(unit: Unit = 'kg'): AppState {
-  const settings = defaultSettings(unit);
-  const lifts = defaultLifts(unit);
-  return {
-    version: 1,
-    settings,
-    lifts,
-    nextType: 'A',
+  const base = {
+    version: 2 as const,
+    settings: defaultSettings(unit),
+    exercises: defaultExercises(unit),
+    program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
+    lifts: defaultLifts(unit),
+    nextType: 'A' as const,
     history: [],
-    current: createWorkout('A', lifts, settings),
   };
+  return { ...base, current: createWorkout('A', base) };
 }
 
 function updateCurrent(state: AppState, fn: (w: Workout) => Workout): AppState {
   return { ...state, current: fn(state.current) };
 }
 
-/** Rebuild the not-yet-started workout so it reflects new lifts/settings. */
+/** Rebuild the not-yet-started workout so it reflects new lifts/settings/program. */
 function refreshIfUntouched(state: AppState): AppState {
   if (hasLoggedSets(state.current)) return state;
-  const fresh = createWorkout(state.current.type, state.lifts, state.settings);
+  const fresh = createWorkout(state.current.type, state);
   return {
     ...state,
     current: {
@@ -58,6 +74,12 @@ function refreshIfUntouched(state: AppState): AppState {
       breakDeloadHandled: state.current.breakDeloadHandled,
     },
   };
+}
+
+function mapLifts(state: AppState, fn: (lift: LiftState, def: ExerciseDef | undefined) => LiftState) {
+  return Object.fromEntries(
+    Object.entries(state.lifts).map(([id, lift]) => [id, fn(lift, state.exercises[id])]),
+  ) as Record<ExerciseId, LiftState>;
 }
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -102,15 +124,15 @@ export function reducer(state: AppState, action: Action): AppState {
       return updateCurrent(state, w => ({ ...w, bodyWeight: action.bodyWeight }));
 
     case 'acceptBreakDeload': {
-      const lifts = Object.fromEntries(
-        EXERCISE_IDS.map(id => [
-          id,
-          {
-            weight: roundLoadable(state.lifts[id].weight * (1 - action.percent / 100), state.settings),
-            failures: 0,
-          },
-        ]),
-      ) as Record<ExerciseId, LiftState>;
+      const lifts = mapLifts(state, (lift, def) => ({
+        weight: roundForExercise(
+          lift.weight * (1 - action.percent / 100),
+          def?.equipment ?? 'barbell',
+          def?.increment ?? 0,
+          state.settings,
+        ),
+        failures: 0,
+      }));
       const next = refreshIfUntouched({ ...state, lifts });
       return updateCurrent(next, w => ({ ...w, breakDeloadHandled: true }));
     }
@@ -125,7 +147,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         nextType: type,
         current: {
-          ...createWorkout(type, state.lifts, state.settings),
+          ...createWorkout(type, state),
           note: state.current.note,
           bodyWeight: state.current.bodyWeight,
           breakDeloadHandled: state.current.breakDeloadHandled,
@@ -137,7 +159,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         current: {
-          ...createWorkout(state.current.type, state.lifts, state.settings),
+          ...createWorkout(state.current.type, state),
           breakDeloadHandled: state.current.breakDeloadHandled,
         },
       };
@@ -159,31 +181,81 @@ export function reducer(state: AppState, action: Action): AppState {
       const to = action.unit;
       if (from === to) return state;
       const settings: Settings = { ...state.settings, unit: to, ...unitDefaults(to) };
-      const lifts = Object.fromEntries(
-        EXERCISE_IDS.map(id => [
-          id,
-          {
-            ...state.lifts[id],
-            weight: roundLoadable(convertWeight(state.lifts[id].weight, from, to), settings),
-          },
-        ]),
-      ) as Record<ExerciseId, LiftState>;
-      const convert = (w: Workout): Workout => ({
-        ...w,
+      // 2.5 kg ↔ 5 lb is how StrongLifts maps increments between units.
+      const factor = to === 'lb' ? 2 : 0.5;
+      const exercises = Object.fromEntries(
+        Object.entries(state.exercises).map(([id, def]) => [id, { ...def, increment: def.increment * factor }]),
+      );
+      const round = (value: number, def: ExerciseDef | undefined) =>
+        roundForExercise(convertWeight(value, from, to), def?.equipment ?? 'barbell', def?.increment ?? 0, settings);
+      const lifts = mapLifts({ ...state, exercises }, (lift, def) => ({ ...lift, weight: round(lift.weight, def) }));
+      const current: Workout = {
+        ...state.current,
         unit: to,
-        exercises: w.exercises.map(e => ({
-          ...e,
-          weight: roundLoadable(convertWeight(e.weight, from, to), settings),
-        })),
+        exercises: state.current.exercises.map(e => ({ ...e, weight: round(e.weight, exercises[e.id]) })),
         bodyWeight:
-          w.bodyWeight == null ? null : Math.round(convertWeight(w.bodyWeight, from, to) * 10) / 10,
-      });
-      return { ...state, settings, lifts, current: convert(state.current) };
+          state.current.bodyWeight == null
+            ? null
+            : Math.round(convertWeight(state.current.bodyWeight, from, to) * 10) / 10,
+      };
+      return { ...state, settings, exercises, lifts, current };
     }
 
     case 'setLift': {
-      const lifts = { ...state.lifts, [action.id]: { ...state.lifts[action.id], ...action.lift } };
+      const lifts = { ...state.lifts, [action.id]: { ...(state.lifts[action.id] ?? { weight: 0, failures: 0 }), ...action.lift } };
       return refreshIfUntouched({ ...state, lifts });
+    }
+
+    case 'saveExercise': {
+      const def = {
+        ...action.exercise,
+        name: action.exercise.name.trim() || 'Exercise',
+        sets: Math.max(1, Math.round(action.exercise.sets)),
+        reps: Math.max(1, Math.round(action.exercise.reps)),
+        increment: Math.max(0, action.exercise.increment),
+      };
+      const exercises = { ...state.exercises, [def.id]: def };
+      const existing = state.lifts[def.id];
+      const lift: LiftState =
+        action.weight != null
+          ? { weight: Math.max(0, action.weight), failures: existing && existing.weight === action.weight ? existing.failures : 0 }
+          : existing ?? { weight: startWeight(def.equipment, state.settings), failures: 0 };
+      return refreshIfUntouched({ ...state, exercises, lifts: { ...state.lifts, [def.id]: lift } });
+    }
+
+    case 'deleteExercise': {
+      if (state.program.A.includes(action.id) || state.program.B.includes(action.id)) return state;
+      const exercises = { ...state.exercises };
+      const lifts = { ...state.lifts };
+      delete exercises[action.id];
+      delete lifts[action.id];
+      return { ...state, exercises, lifts };
+    }
+
+    case 'setProgram': {
+      const ids = action.ids.filter((id, i) => state.exercises[id] && action.ids.indexOf(id) === i);
+      if (ids.length === 0) return state;
+      return refreshIfUntouched({ ...state, program: { ...state.program, [action.workout]: ids } });
+    }
+
+    case 'applyPreset': {
+      const defaults = defaultExercises(state.settings.unit);
+      const exercises = { ...state.exercises };
+      const lifts = { ...state.lifts };
+      const startLifts = defaultLifts(state.settings.unit);
+      for (const id of BUILT_IN_IDS) {
+        exercises[id] = {
+          ...defaults[id],
+          sets: id === 'deadlift' ? 1 : action.preset === '5x5' ? 5 : 3,
+        };
+        lifts[id] ??= startLifts[id];
+      }
+      return refreshIfUntouched({
+        ...state,
+        exercises,
+        lifts,
+        program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
+      });
     }
 
     case 'import':

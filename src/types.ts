@@ -1,7 +1,19 @@
 export type Unit = 'kg' | 'lb';
-export type ExerciseId = 'squat' | 'bench' | 'row' | 'ohp' | 'deadlift';
+/** Built-in lifts use 'squat' | 'bench' | 'row' | 'ohp' | 'deadlift'; custom ones get generated ids. */
+export type ExerciseId = string;
 export type WorkoutType = 'A' | 'B';
-export type ProgramVariant = '5x5' | '3x5';
+/** Barbell lifts get warmups, plate math and plate-rounded deloads. */
+export type Equipment = 'barbell' | 'other';
+
+export interface ExerciseDef {
+  id: ExerciseId;
+  name: string;
+  sets: number;
+  reps: number;
+  /** Weight added after a successful session. */
+  increment: number;
+  equipment: Equipment;
+}
 
 export interface Settings {
   unit: Unit;
@@ -12,10 +24,8 @@ export interface Settings {
   restEasy: number;
   restHard: number;
   restFailed: number;
-  increments: Record<ExerciseId, number>;
   deloadPercent: number;
   failuresBeforeDeload: number;
-  program: ProgramVariant;
   sound: boolean;
 }
 
@@ -33,6 +43,9 @@ export interface LoggedSet {
 
 export interface SessionExercise {
   id: ExerciseId;
+  /** Snapshot so history still reads well if the exercise is renamed or deleted. */
+  name: string;
+  equipment: Equipment;
   weight: number;
   sets: LoggedSet[];
 }
@@ -58,8 +71,12 @@ export interface Workout {
 }
 
 export interface AppState {
-  version: 1;
+  version: 2;
   settings: Settings;
+  /** Exercise library: every exercise the user can put in a workout. */
+  exercises: Record<ExerciseId, ExerciseDef>;
+  /** Exercise order for each workout. */
+  program: Record<WorkoutType, ExerciseId[]>;
   lifts: Record<ExerciseId, LiftState>;
   nextType: WorkoutType;
   /** Finished workouts, newest first. */

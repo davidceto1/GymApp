@@ -1,41 +1,98 @@
-import type { AppState, Workout } from '../types';
-import { EXERCISE_IDS, EXERCISE_NAMES, defaultSettings } from '../logic/program';
+import type { AppState, ExerciseDef, Workout } from '../types';
+import { BUILT_IN_IDS, DEFAULT_PROGRAM, builtInName, defaultExercises, defaultSettings } from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import { initialState } from './reducer';
 
 export const STORAGE_KEY = 'stronglifts-remake-v1';
 
-function isObject(v: unknown): v is Record<string, unknown> {
+type Obj = Record<string, unknown>;
+
+function isObject(v: unknown): v is Obj {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function isWorkout(v: unknown): v is Workout {
+function isWorkout(v: unknown): boolean {
   return (
     isObject(v) &&
     typeof v.id === 'string' &&
     (v.type === 'A' || v.type === 'B') &&
     Array.isArray(v.exercises) &&
     v.exercises.every(
-      e => isObject(e) && typeof e.weight === 'number' && Array.isArray(e.sets),
+      e => isObject(e) && typeof e.id === 'string' && typeof e.weight === 'number' && Array.isArray(e.sets),
     )
   );
 }
 
-/** Validate untrusted data (localStorage or an imported backup). */
-export function parseState(raw: unknown): AppState {
-  if (!isObject(raw) || raw.version !== 1) throw new Error('Not a StrongLifts backup (missing version 1).');
-  if (!isObject(raw.lifts) || !EXERCISE_IDS.every(id => isObject((raw.lifts as Record<string, unknown>)[id]))) {
+/** Fill in fields added after a workout was saved (name/equipment snapshots). */
+function upgradeWorkout(w: Obj, exercises: Record<string, ExerciseDef>): Workout {
+  return {
+    ...(w as unknown as Workout),
+    exercises: (w.exercises as Obj[]).map(e => ({
+      ...(e as unknown as Workout['exercises'][number]),
+      name: typeof e.name === 'string' ? e.name : exercises[e.id as string]?.name ?? builtInName(e.id as string),
+      equipment: e.equipment === 'other' ? 'other' : 'barbell',
+    })),
+  };
+}
+
+/** Version 1 had five fixed lifts with increments/program variant stored in settings. */
+function migrateV1(raw: Obj): Obj {
+  const settings = isObject(raw.settings) ? raw.settings : {};
+  const unit = settings.unit === 'lb' ? 'lb' : 'kg';
+  const exercises = defaultExercises(unit);
+  const increments = isObject(settings.increments) ? settings.increments : {};
+  for (const id of BUILT_IN_IDS) {
+    if (typeof increments[id] === 'number') exercises[id].increment = increments[id] as number;
+    if (settings.program === '3x5' && id !== 'deadlift') exercises[id].sets = 3;
+  }
+  const rest = { ...settings };
+  delete rest.increments;
+  delete rest.program;
+  return {
+    ...raw,
+    version: 2,
+    settings: rest,
+    exercises,
+    program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
+  };
+}
+
+/** Validate untrusted data (localStorage or an imported backup) and upgrade old versions. */
+export function parseState(input: unknown): AppState {
+  if (!isObject(input) || (input.version !== 1 && input.version !== 2)) {
+    throw new Error('Not a StrongLifts backup (unknown version).');
+  }
+  const raw = input.version === 1 ? migrateV1(input) : input;
+
+  if (!isObject(raw.exercises) || !Object.values(raw.exercises).every(
+    d => isObject(d) && typeof d.id === 'string' && typeof d.name === 'string' && typeof d.sets === 'number' && typeof d.reps === 'number',
+  )) {
+    throw new Error('Backup exercise list is malformed.');
+  }
+  const exercises = raw.exercises as Record<string, ExerciseDef>;
+  const program = raw.program;
+  if (
+    !isObject(program) ||
+    !(['A', 'B'] as const).every(t => Array.isArray(program[t]) && (program[t] as unknown[]).length > 0 && (program[t] as unknown[]).every(id => typeof id === 'string' && exercises[id as string]))
+  ) {
+    throw new Error('Backup workouts are malformed.');
+  }
+  if (!isObject(raw.lifts) || !Object.values(raw.lifts).every(l => isObject(l) && typeof l.weight === 'number')) {
     throw new Error('Backup is missing lift data.');
   }
   if (!Array.isArray(raw.history) || !raw.history.every(isWorkout)) {
     throw new Error('Backup history is malformed.');
   }
   if (!isWorkout(raw.current)) throw new Error('Backup current workout is malformed.');
+
   const unit = isObject(raw.settings) && raw.settings.unit === 'lb' ? 'lb' : 'kg';
   return {
     ...(raw as unknown as AppState),
+    version: 2,
     // Fill in any settings added after the backup was made.
-    settings: { ...defaultSettings(unit), ...(raw.settings as object) },
+    settings: { ...defaultSettings(unit), ...(isObject(raw.settings) ? raw.settings : {}) },
+    history: (raw.history as Obj[]).map(w => upgradeWorkout(w, exercises)),
+    current: upgradeWorkout(raw.current as Obj, exercises),
   };
 }
 
@@ -69,7 +126,7 @@ export function historyToCsv(history: Workout[]): string {
       rows.push([
         date,
         w.type,
-        EXERCISE_NAMES[ex.id] ?? ex.id,
+        ex.name,
         formatWeight(ex.weight),
         w.unit,
         ex.sets.map(s => (s.reps === null ? '-' : String(s.reps))).join('/'),

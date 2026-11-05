@@ -1,7 +1,6 @@
 import { useState, type Dispatch } from 'react';
 import type { AppState } from '../types';
 import type { Action } from '../state/reducer';
-import { EXERCISE_NAMES } from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import {
   breakDeloadPercent,
@@ -133,8 +132,8 @@ export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
           const lift = state.lifts[ex.id];
           return (
             <span key={ex.id}>
-              {EXERCISE_NAMES[ex.id]}: {formatWeight(ex.weight)}{settings.unit}
-              {lift.failures > 0 && ` · failed ${lift.failures}×`}
+              {ex.name}: {formatWeight(ex.weight)}{settings.unit}
+              {lift && lift.failures > 0 && ` · failed ${lift.failures}×`}
             </span>
           );
         })}
