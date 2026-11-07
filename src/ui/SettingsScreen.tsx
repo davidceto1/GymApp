@@ -6,8 +6,10 @@ import { formatWeight } from '../logic/weights';
 import { historyToCsv, parseState } from '../state/storage';
 import { NumberField } from './common';
 import { downloadFile, readText } from './format';
+import { AccountCard } from './AccountCard';
+import type { CloudSync } from '../sync/useCloudSync';
 
-export function SettingsScreen({ state, dispatch }: { state: AppState; dispatch: Dispatch<Action> }) {
+export function SettingsScreen({ state, dispatch, cloud }: { state: AppState; dispatch: Dispatch<Action>; cloud: CloudSync }) {
   const { settings } = state;
   const u = settings.unit;
   const fileInput = useRef<HTMLInputElement>(null);
@@ -103,6 +105,8 @@ export function SettingsScreen({ state, dispatch }: { state: AppState; dispatch:
         </label>
         <p className="muted small">Smallest jump: {formatWeight(Math.min(...settings.plates) * 2)} {u}. Add fractional plates for smaller increments.</p>
       </section>
+
+      <AccountCard cloud={cloud} />
 
       <section className="card">
         <h2 className="card-title">Backup</h2>

@@ -214,6 +214,12 @@ describe('Other screens', () => {
     expect(screen.getByRole('button', { name: 'Edit Bench Press' })).toHaveTextContent('77.5kg');
   });
 
+  it('settings: cloud sync explains it is off when Supabase is not configured', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(card('Cloud sync').getByText(/Not set up/)).toBeInTheDocument();
+  });
+
   it('remembers the selected tab in the URL hash', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'History' }));
