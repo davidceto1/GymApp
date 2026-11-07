@@ -6,6 +6,7 @@ import { HistoryScreen } from './ui/HistoryScreen';
 import { ProgressScreen } from './ui/ProgressScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
 import { RestTimer } from './ui/RestTimer';
+import { useCloudSync } from './sync/useCloudSync';
 
 const TABS = [
   { id: 'workout', label: 'Workout', icon: 'M6 10v4M18 10v4M3 11v2M21 11v2M6 12h12' },
@@ -24,6 +25,8 @@ function tabFromHash(): Tab {
 function App() {
   const [state, dispatch] = useReducer(reducer, undefined, loadState);
   const [tab, setTab] = useState<Tab>(tabFromHash);
+
+  const cloud = useCloudSync(state, dispatch);
 
   useEffect(() => saveState(state), [state]);
 
@@ -45,7 +48,7 @@ function App() {
         {tab === 'workout' && <WorkoutScreen state={state} dispatch={dispatch} />}
         {tab === 'history' && <HistoryScreen state={state} dispatch={dispatch} />}
         {tab === 'progress' && <ProgressScreen state={state} />}
-        {tab === 'settings' && <SettingsScreen state={state} dispatch={dispatch} />}
+        {tab === 'settings' && <SettingsScreen state={state} dispatch={dispatch} cloud={cloud} />}
       </main>
 
       <div className="app-bottom">

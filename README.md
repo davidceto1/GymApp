@@ -18,6 +18,26 @@ React 19 + TypeScript + Vite, no backend: everything is stored in your browser.
 - **Backup**: export/import JSON, export history as CSV.
 - Light and dark themes, installable as a PWA.
 
+## Cloud sync (optional, Supabase)
+
+Without configuration the app is local-only. With Supabase, you sign in with email + password
+(Settings → Cloud sync) and settings, exercises, workouts and history sync across devices.
+The app still runs from local storage, so it works offline and uploads changes when back online.
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run [`supabase/migrations/20261106000000_init.sql`](supabase/migrations/20261106000000_init.sql)
+   (or `supabase db push` with the Supabase CLI). Row-level security restricts every row to its owner.
+3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key
+   (Project Settings → API). For a deployed build, set the same variables in the host.
+4. Start the app, open Settings → Cloud sync and choose **Create account**, then sign in.
+5. Single user? After creating your account, turn off **Allow new users to sign up**
+   (Authentication → Sign In / Providers) so nobody else can register. Turn it back on to open the app to others.
+
+Sync details: the first sign-in uploads this device's data. On a new device, cloud settings win and
+any local-only workouts are merged into the history. After that, each change is uploaded about
+1.5 s later as a row-level diff, and the app pulls the cloud copy on startup, on reconnect and when reopened.
+If two devices edit the same settings while offline, the last one to sync wins.
+
 ## Development
 
 ```sh
