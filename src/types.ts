@@ -9,8 +9,15 @@ export interface ExerciseDef {
   id: ExerciseId;
   name: string;
   sets: number;
+  /** Top of the rep range (seconds for timed exercises). */
   reps: number;
-  /** Weight added after a successful session. */
+  /** Bottom of the rep range; equal to `reps` for a fixed target like 5×5. */
+  minReps: number;
+  /** Sets are holds measured in seconds instead of reps. */
+  timed: boolean;
+  /** Reps/seconds are per side (single-arm or single-leg work). */
+  perSide: boolean;
+  /** Weight added once every set reaches the top of the range. */
   increment: number;
   equipment: Equipment;
 }
@@ -31,12 +38,17 @@ export interface Settings {
 
 export interface LiftState {
   weight: number;
-  /** Consecutive failed sessions at the current weight. */
+  /** Consecutive sessions at the current weight without progress (missed reps or no rep gain). */
   failures: number;
+  /** Most total reps logged in one session at the current weight, for double progression. */
+  bestReps?: number;
 }
 
 export interface LoggedSet {
+  /** Top of the range: the value a tap fills in. */
   target: number;
+  /** Bottom of the range; less counts as missed. Absent on older workouts (same as target). */
+  min?: number;
   /** null = not logged yet. */
   reps: number | null;
 }
@@ -46,6 +58,8 @@ export interface SessionExercise {
   /** Snapshot so history still reads well if the exercise is renamed or deleted. */
   name: string;
   equipment: Equipment;
+  timed?: boolean;
+  perSide?: boolean;
   weight: number;
   sets: LoggedSet[];
 }

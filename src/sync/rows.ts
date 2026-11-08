@@ -1,4 +1,4 @@
-import type { AppState, Equipment, Settings, SessionExercise, Unit, Workout, WorkoutType } from '../types';
+import type { AppState, Equipment, ExerciseDef, Settings, SessionExercise, Unit, Workout, WorkoutType } from '../types';
 import { parseState } from '../state/storage';
 
 /** Database rows without user_id/updated_at (added on push, ignored on pull). */
@@ -15,8 +15,40 @@ export interface ExerciseRow {
   name: string;
   sets: number;
   reps: number;
+  /** Null on rows written before rep ranges existed (= fixed target). */
+  min_reps: number | null;
+  timed: boolean;
+  per_side: boolean;
   increment: number;
   equipment: Equipment;
+}
+
+function exerciseToRow(e: ExerciseDef): ExerciseRow {
+  return {
+    id: e.id,
+    name: e.name,
+    sets: e.sets,
+    reps: e.reps,
+    min_reps: e.minReps,
+    timed: e.timed,
+    per_side: e.perSide,
+    increment: e.increment,
+    equipment: e.equipment,
+  };
+}
+
+function exerciseFromRow(r: ExerciseRow): ExerciseDef {
+  return {
+    id: r.id,
+    name: r.name,
+    sets: r.sets,
+    reps: r.reps,
+    minReps: r.min_reps ?? r.reps,
+    timed: r.timed ?? false,
+    perSide: r.per_side ?? false,
+    increment: r.increment,
+    equipment: r.equipment,
+  };
 }
 
 export interface WorkoutRow {
@@ -49,12 +81,7 @@ export function stateToRows(state: AppState): Rows {
       next_type: state.nextType,
       current: state.current,
     },
-    exercises: Object.fromEntries(
-      Object.values(state.exercises).map(e => [
-        e.id,
-        { id: e.id, name: e.name, sets: e.sets, reps: e.reps, increment: e.increment, equipment: e.equipment },
-      ]),
-    ),
+    exercises: Object.fromEntries(Object.values(state.exercises).map(e => [e.id, exerciseToRow(e)])),
     workouts: Object.fromEntries(
       state.history.map(w => [
         w.id,
@@ -95,7 +122,7 @@ export function rowsToState(userState: UserStateRow, exercises: ExerciseRow[], w
   return parseState({
     version: 2,
     settings: userState.settings,
-    exercises: Object.fromEntries(exercises.map(e => [e.id, e])),
+    exercises: Object.fromEntries(exercises.map(e => [e.id, exerciseFromRow(e)])),
     program: userState.program,
     lifts: userState.lifts,
     nextType: userState.next_type === 'B' ? 'B' : 'A',

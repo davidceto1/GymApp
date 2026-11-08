@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { AppState, ExerciseId } from '../types';
 import { convertWeight, formatWeight } from '../logic/weights';
-import { exerciseOutcome } from '../logic/workout';
+import { formatTarget } from '../logic/program';
+import { exerciseOutcome, setMin } from '../logic/workout';
 import { LineChart, type ChartPoint } from './LineChart';
 
 const BODYWEIGHT = 'bodyweight';
@@ -32,13 +33,16 @@ function liftPoints(state: AppState, id: ExerciseId): (ChartPoint & { reps: numb
     if (!ex) continue;
     const outcome = exerciseOutcome(ex);
     if (outcome === 'skipped') continue;
-    const reps = ex.sets[0]?.target ?? 5;
+    const first = ex.sets[0];
+    // Fewest reps in a logged set drives the 1RM estimate; holds don't estimate a 1RM (0).
+    const logged = ex.sets.flatMap(s => (s.reps == null ? [] : [s.reps]));
+    const reps = ex.timed ? 0 : Math.min(...logged);
     points.push({
       t: w.finishedAt ?? w.startedAt ?? 0,
       value: round1(convertWeight(ex.weight, w.unit, unit)),
       failed: outcome === 'failed',
       reps,
-      detail: `${ex.sets.length}×${reps}: ${ex.sets.map(s => s.reps ?? '–').join(' ')}`,
+      detail: `${ex.sets.length}×${first ? formatTarget(first.target, setMin(first), ex) : ''}: ${ex.sets.map(s => s.reps ?? '–').join(' ')}`,
     });
   }
   return points;
@@ -63,7 +67,8 @@ export function ProgressScreen({ state }: { state: AppState }) {
   const completed = lift.filter(p => !p.failed);
   const best = completed.length ? Math.max(...completed.map(p => p.value)) : null;
   // Epley estimate from the best completed session.
-  const oneRm = completed.length ? Math.max(...completed.map(p => p.value * (1 + p.reps / 30))) : null;
+  const repSessions = completed.filter(p => p.reps > 0);
+  const oneRm = repSessions.length ? Math.max(...repSessions.map(p => p.value * (1 + p.reps / 30))) : null;
   const next = view === BODYWEIGHT ? undefined : state.lifts[view]?.weight;
 
   return (

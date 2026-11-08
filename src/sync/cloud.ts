@@ -93,7 +93,7 @@ export async function sync(db: SupabaseClient, userId: string, local: AppState):
 
   const [us, ex, wo] = await Promise.all([
     db.from('user_state').select('settings, program, lifts, next_type, current').eq('user_id', userId).maybeSingle(),
-    db.from('exercises').select('id, name, sets, reps, increment, equipment').eq('user_id', userId),
+    db.from('exercises').select('id, name, sets, reps, min_reps, timed, per_side, increment, equipment').eq('user_id', userId),
     db.from('workouts').select('id, type, unit, started_at, finished_at, exercises, note, body_weight').eq('user_id', userId),
   ]);
   const userState = check(us) as UserStateRow | null;

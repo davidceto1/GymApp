@@ -252,7 +252,8 @@ describe('Workout editor', () => {
     await user.type(sheet.getByLabelText('Exercise name'), 'Dips');
     await user.click(sheet.getByRole('radio', { name: 'Dumbbell / other' }));
     await fill(sheet.getByLabelText('Sets'), '3', user);
-    await fill(sheet.getByLabelText('Reps'), '10', user);
+    await fill(sheet.getByLabelText('Max reps'), '12', user);
+    await fill(sheet.getByLabelText('Min reps'), '8', user);
     await fill(sheet.getByLabelText('Next weight'), '0', user);
     await user.click(sheet.getByRole('button', { name: 'Add exercise' }));
 
@@ -260,10 +261,13 @@ describe('Workout editor', () => {
 
     await user.click(screen.getByRole('button', { name: 'Workout' }));
     const dips = card('Dips');
-    expect(dips.getByRole('button', { name: /Dips weight/ })).toHaveTextContent('3×10 BW');
+    expect(dips.getByRole('button', { name: /Dips weight/ })).toHaveTextContent('3×8–12 BW');
     expect(dips.queryByRole('tab', { name: /Warmup/ })).not.toBeInTheDocument();
     await user.click(dips.getByRole('button', { name: /^Set 1:/ }));
-    expect(dips.getByRole('button', { name: /^Set 1:/ })).toHaveAccessibleName('Set 1: 10 reps');
+    expect(dips.getByRole('button', { name: /^Set 1:/ })).toHaveAccessibleName('Set 1: 12 reps');
+    // 11 is inside the 8–12 range: counted, not marked as missed.
+    await user.click(dips.getByRole('button', { name: /^Set 1:/ }));
+    expect(dips.getByRole('button', { name: /^Set 1:/ })).toHaveClass('in-range');
   });
 
   it('reorders, removes and re-adds exercises', async () => {

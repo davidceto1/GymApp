@@ -16,6 +16,7 @@ import {
   isSetFailed,
   nextReps,
   roundForExercise,
+  TIMED_STEP,
 } from '../logic/workout';
 
 export type Preset = '5x5' | '3x5';
@@ -89,7 +90,7 @@ export function reducer(state: AppState, action: Action): AppState {
         const ex = w.exercises[action.exercise];
         const set = ex?.sets[action.set];
         if (!set) return w;
-        const reps = nextReps(set);
+        const reps = nextReps(set, ex.timed ? TIMED_STEP : 1);
         const updated = { ...set, reps };
         const exercises = w.exercises.map((e, i) =>
           i === action.exercise
@@ -213,12 +214,15 @@ export function reducer(state: AppState, action: Action): AppState {
         sets: Math.max(1, Math.round(action.exercise.sets)),
         reps: Math.max(1, Math.round(action.exercise.reps)),
         increment: Math.max(0, action.exercise.increment),
+        timed: !!action.exercise.timed,
+        perSide: !!action.exercise.perSide,
       };
+      def.minReps = Math.min(def.reps, Math.max(1, Math.round(action.exercise.minReps ?? def.reps)));
       const exercises = { ...state.exercises, [def.id]: def };
       const existing = state.lifts[def.id];
       const lift: LiftState =
-        action.weight != null
-          ? { weight: Math.max(0, action.weight), failures: existing && existing.weight === action.weight ? existing.failures : 0 }
+        action.weight != null && !(existing && existing.weight === action.weight)
+          ? { weight: Math.max(0, action.weight), failures: 0 }
           : existing ?? { weight: startWeight(def.equipment, state.settings), failures: 0 };
       return refreshIfUntouched({ ...state, exercises, lifts: { ...state.lifts, [def.id]: lift } });
     }

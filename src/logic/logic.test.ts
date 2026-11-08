@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PROGRAM, defaultExercises, defaultLifts, defaultSettings } from './program';
+import { DEFAULT_PROGRAM, defaultExercises, defaultLifts, defaultSettings, formatScheme } from './program';
 import {
   convertWeight,
   plateBreakdown,
@@ -14,6 +14,7 @@ import {
   nextReps,
   progressLift,
   roundForExercise,
+  TIMED_STEP,
 } from './workout';
 import type { ExerciseDef, SessionExercise } from '../types';
 
@@ -25,7 +26,7 @@ function ex(id: string, weight: number, reps: (number | null)[]): SessionExercis
   return { id, name: id, equipment: 'barbell', weight, sets: reps.map(r => ({ target: 5, reps: r })) };
 }
 
-const dips: ExerciseDef = { id: 'dips', name: 'Dips', sets: 3, reps: 8, increment: 2, equipment: 'other' };
+const dips: ExerciseDef = { id: 'dips', name: 'Dips', sets: 3, reps: 8, minReps: 8, timed: false, perSide: false, increment: 2, equipment: 'other' };
 
 describe('program', () => {
   it('builds workout A as squat/bench/row 5×5', () => {
@@ -117,6 +118,61 @@ describe('progression', () => {
     expect(roundForExercise(8.6, 'other', 2, kg)).toBe(8);
     expect(roundForExercise(-3, 'other', 2, kg)).toBe(0);
     expect(roundForExercise(8.6, 'barbell', 2, kg)).toBe(20);
+  });
+});
+
+describe('rep ranges (double progression)', () => {
+  // 3×6–8 dumbbell bench, +2 kg once every set hits 8.
+  const press: ExerciseDef = { id: 'press', name: 'DB Bench', sets: 3, reps: 8, minReps: 6, timed: false, perSide: false, increment: 2, equipment: 'other' };
+  const session = (weight: number, reps: (number | null)[]): SessionExercise => ({
+    id: 'press', name: 'DB Bench', equipment: 'other', weight, sets: reps.map(r => ({ target: 8, min: 6, reps: r })),
+  });
+
+  it('builds sets with the top of the range as the tap target', () => {
+    const w = createWorkout('A', { ...programState, exercises: { ...defs, press }, program: { A: ['press'], B: ['squat'] } });
+    expect(w.exercises[0].sets).toEqual([{ target: 8, min: 6, reps: null }, { target: 8, min: 6, reps: null }, { target: 8, min: 6, reps: null }]);
+  });
+
+  it('classifies sessions against the range', () => {
+    expect(exerciseOutcome(session(20, [8, 8, 8]))).toBe('success');
+    expect(exerciseOutcome(session(20, [8, 7, 6]))).toBe('progress');
+    expect(exerciseOutcome(session(20, [8, 7, 5]))).toBe('failed');
+    expect(exerciseOutcome(session(20, [8, 8, null]))).toBe('failed');
+  });
+
+  it('adds weight only when every set reaches the top', () => {
+    expect(progressLift({ weight: 20, failures: 1, bestReps: 22 }, session(20, [8, 8, 8]), press, kg)).toEqual({ weight: 22, failures: 0 });
+  });
+
+  it('keeps the weight and records reps while they keep climbing', () => {
+    expect(progressLift({ weight: 20, failures: 0 }, session(20, [7, 6, 6]), press, kg)).toEqual({ weight: 20, failures: 0, bestReps: 19 });
+    expect(progressLift({ weight: 20, failures: 1, bestReps: 19 }, session(20, [7, 7, 6]), press, kg)).toEqual({ weight: 20, failures: 0, bestReps: 20 });
+  });
+
+  it('counts a session with no rep gain as a stall, and deloads after the limit', () => {
+    expect(progressLift({ weight: 20, failures: 0, bestReps: 20 }, session(20, [7, 7, 6]), press, kg)).toEqual({ weight: 20, failures: 1, bestReps: 20 });
+    expect(progressLift({ weight: 20, failures: 1, bestReps: 20 }, session(20, [8, 6, 5]), press, kg)).toEqual({ weight: 20, failures: 2, bestReps: 20 });
+    // Third stall: 20 × 0.9 = 18.
+    expect(progressLift({ weight: 20, failures: 2, bestReps: 20 }, session(20, [6, 6, 6]), press, kg)).toEqual({ weight: 18, failures: 0 });
+  });
+
+  it('starts rep tracking fresh after a weight change', () => {
+    expect(progressLift({ weight: 22, failures: 0 }, session(22, [6, 6, 6]), press, kg)).toEqual({ weight: 22, failures: 0, bestReps: 18 });
+    expect(progressLift({ weight: 20, failures: 2, bestReps: 23 }, session(22, [6, 6, 6]), press, kg)).toEqual({ weight: 22, failures: 0, bestReps: 18 });
+  });
+
+  it('steps timed sets down 5 seconds per tap', () => {
+    expect(nextReps({ target: 30, reps: null }, TIMED_STEP)).toBe(30);
+    expect(nextReps({ target: 30, reps: 30 }, TIMED_STEP)).toBe(25);
+    expect(nextReps({ target: 30, reps: 3 }, TIMED_STEP)).toBe(0);
+    expect(nextReps({ target: 30, reps: 0 }, TIMED_STEP)).toBe(null);
+  });
+
+  it('formats targets', () => {
+    expect(formatScheme(press)).toBe('3×6–8');
+    expect(formatScheme({ ...press, timed: true, minReps: 20, reps: 30 })).toBe('3×20–30s');
+    expect(formatScheme({ ...press, perSide: true, minReps: 8 })).toBe('3×8/side');
+    expect(formatScheme(defs.squat)).toBe('5×5');
   });
 });
 

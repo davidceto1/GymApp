@@ -107,7 +107,7 @@ describe('reducer', () => {
 });
 
 describe('workout editor', () => {
-  const pullups: ExerciseDef = { id: 'pullups', name: 'Pull-ups', sets: 3, reps: 8, increment: 2.5, equipment: 'other' };
+  const pullups: ExerciseDef = { id: 'pullups', name: 'Pull-ups', sets: 3, reps: 8, minReps: 8, timed: false, perSide: false, increment: 2.5, equipment: 'other' };
 
   it('creates an exercise and adds it to a workout', () => {
     let s = run(initialState(), { type: 'saveExercise', exercise: pullups, weight: 0 });
@@ -130,7 +130,7 @@ describe('workout editor', () => {
   it('edits sets, reps and increment of an existing exercise', () => {
     let s = run(initialState(), {
       type: 'saveExercise',
-      exercise: { ...initialState().exercises.bench, sets: 4, reps: 6, increment: 1.25 },
+      exercise: { ...initialState().exercises.bench, sets: 4, reps: 6, minReps: 6, increment: 1.25 },
       weight: 40,
     });
     expect(s.current.exercises[1]).toMatchObject({ weight: 40 });
