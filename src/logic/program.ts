@@ -45,6 +45,9 @@ export function defaultExercises(unit: Unit = 'kg'): Record<ExerciseId, Exercise
         name: BUILT_IN_NAMES[id],
         sets: id === 'deadlift' ? 1 : 5,
         reps: REPS_PER_SET,
+        minReps: REPS_PER_SET,
+        timed: false,
+        perSide: false,
         increment: defaultIncrement(id, unit),
         equipment: 'barbell',
       } satisfies ExerciseDef,
@@ -74,6 +77,17 @@ export function defaultSettings(unit: Unit = 'kg'): Settings {
 export function defaultLifts(unit: Unit = 'kg'): Record<ExerciseId, LiftState> {
   const w = START_WEIGHTS[unit];
   return Object.fromEntries(BUILT_IN_IDS.map(id => [id, { weight: w[id], failures: 0 }]));
+}
+
+/** "6–8", "30s", "8/side", "20–30s/side". `min` defaults to `max` (fixed target). */
+export function formatTarget(max: number, min = max, opts: { timed?: boolean; perSide?: boolean } = {}): string {
+  const range = min < max ? `${min}–${max}` : `${max}`;
+  return `${range}${opts.timed ? 's' : ''}${opts.perSide ? '/side' : ''}`;
+}
+
+/** "3×6–8" for an exercise definition. */
+export function formatScheme(def: Pick<ExerciseDef, 'sets' | 'reps' | 'minReps' | 'timed' | 'perSide'>): string {
+  return `${def.sets}×${formatTarget(def.reps, def.minReps, def)}`;
 }
 
 /** Starting weight for a new exercise: the empty bar for barbell lifts, otherwise 0. */

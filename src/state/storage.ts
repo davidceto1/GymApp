@@ -69,7 +69,14 @@ export function parseState(input: unknown): AppState {
   )) {
     throw new Error('Backup exercise list is malformed.');
   }
-  const exercises = raw.exercises as Record<string, ExerciseDef>;
+  // Rep ranges, timed and per-side sets were added later: older data has a fixed target.
+  const exercises: Record<string, ExerciseDef> = Object.fromEntries(
+    Object.entries(raw.exercises as Record<string, Obj>).map(([id, d]) => {
+      const reps = d.reps as number;
+      const min = typeof d.minReps === 'number' && d.minReps >= 1 ? Math.min(d.minReps, reps) : reps;
+      return [id, { ...(d as unknown as ExerciseDef), minReps: min, timed: d.timed === true, perSide: d.perSide === true }];
+    }),
+  );
   const program = raw.program;
   if (
     !isObject(program) ||
@@ -91,6 +98,7 @@ export function parseState(input: unknown): AppState {
     version: 2,
     // Fill in any settings added after the backup was made.
     settings: { ...defaultSettings(unit), ...(isObject(raw.settings) ? raw.settings : {}) },
+    exercises,
     history: (raw.history as Obj[]).map(w => upgradeWorkout(w, exercises)),
     current: upgradeWorkout(raw.current as Obj, exercises),
   };

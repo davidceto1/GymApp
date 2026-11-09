@@ -34,6 +34,23 @@ describe('cloud rows', () => {
     expect(isEmptyDiff(diffRows(stateToRows(state), stateToRows(back)))).toBe(true);
   });
 
+  it('round-trips rep ranges, timed and per-side exercises', () => {
+    const plank = { id: 'plank', name: 'Plank', sets: 3, reps: 45, minReps: 30, timed: true, perSide: false, increment: 0, equipment: 'other' as const };
+    const stepUp = { id: 'stepup', name: 'Step-up', sets: 3, reps: 10, minReps: 8, timed: false, perSide: true, increment: 2, equipment: 'other' as const };
+    let state = reducer(initialState(), { type: 'saveExercise', exercise: plank, weight: 0 });
+    state = reducer(state, { type: 'saveExercise', exercise: stepUp, weight: 0 });
+    const rows = stateToRows(state);
+    expect(rows.exercises.plank).toMatchObject({ min_reps: 30, timed: true, per_side: false });
+    expect(roundTrip(state).exercises).toEqual(state.exercises);
+  });
+
+  it('reads exercise rows written before rep ranges as fixed targets', () => {
+    const rows = stateToRows(initialState());
+    const old = Object.values(rows.exercises).map(r => ({ ...r, min_reps: null }));
+    const back = rowsToState(rows.userState, old, []);
+    expect(back.exercises.squat).toMatchObject({ reps: 5, minReps: 5, timed: false, perSide: false });
+  });
+
   it('uploads everything when the cloud is empty', () => {
     const state = withWorkouts(2);
     const d = diffRows(null, stateToRows(state));

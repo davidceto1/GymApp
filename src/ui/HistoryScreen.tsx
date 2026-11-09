@@ -2,7 +2,8 @@ import { useState, type Dispatch } from 'react';
 import type { AppState, Workout } from '../types';
 import type { Action } from '../state/reducer';
 import { formatWeight } from '../logic/weights';
-import { exerciseOutcome } from '../logic/workout';
+import { formatTarget } from '../logic/program';
+import { exerciseOutcome, setMin } from '../logic/workout';
 import { formatClock, formatDate, formatLoad } from './format';
 
 function monthKey(ms: number): string {
@@ -30,7 +31,7 @@ function WorkoutCard({ workout, onDelete }: { workout: Workout; onDelete: () => 
             const outcome = exerciseOutcome(ex);
             return (
               <span key={ex.id} className={`history-line ${outcome}`}>
-                {ex.name} {ex.sets.length}×{ex.sets[0]?.target} {formatLoad(ex.weight, workout.unit, ex.equipment)}
+                {ex.name} {ex.sets.length}×{ex.sets[0] ? formatTarget(ex.sets[0].target, setMin(ex.sets[0]), ex) : ''} {formatLoad(ex.weight, workout.unit, ex.equipment)}
                 {outcome === 'failed' && <span className="tag failed">missed reps</span>}
                 {outcome === 'skipped' && <span className="tag">skipped</span>}
               </span>

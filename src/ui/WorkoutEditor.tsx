@@ -1,7 +1,7 @@
 import { useState, type Dispatch } from 'react';
 import type { AppState, Equipment, ExerciseDef, ExerciseId, WorkoutType } from '../types';
 import type { Action } from '../state/reducer';
-import { defaultIncrement, isBuiltIn, startWeight } from '../logic/program';
+import { defaultIncrement, formatScheme, isBuiltIn, startWeight } from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import { newId } from '../logic/workout';
 import { NumberField, Sheet } from './common';
@@ -29,6 +29,7 @@ function ExerciseSheet({
 }) {
   const [d, setD] = useState(draft);
   const set = (patch: Partial<ExerciseDef>) => setD(prev => ({ ...prev, def: { ...prev.def, ...patch } }));
+  const noun = d.def.timed ? 'seconds' : 'reps';
 
   return (
     <Sheet title={isNew ? 'New exercise' : `Edit ${draft.def.name}`} onClose={onClose}>
@@ -54,24 +55,50 @@ function ExerciseSheet({
             ))}
           </div>
         </div>
+        <label className="setting-row span-2">
+          <span>Timed hold (seconds instead of reps)</span>
+          <input type="checkbox" className="switch" checked={d.def.timed} onChange={e => set({ timed: e.target.checked })} />
+        </label>
+        <label className="setting-row span-2">
+          <span>Per side (single arm / leg)</span>
+          <input type="checkbox" className="switch" checked={d.def.perSide} onChange={e => set({ perSide: e.target.checked })} />
+        </label>
         <label className="field">
           <span>Sets</span>
           <NumberField label="Sets" value={d.def.sets} min={1} onCommit={v => v != null && set({ sets: v })} />
         </label>
+        <span className="field" aria-hidden="true" />
         <label className="field">
-          <span>Reps</span>
-          <NumberField label="Reps" value={d.def.reps} min={1} onCommit={v => v != null && set({ reps: v })} />
+          <span>Min {noun}</span>
+          <NumberField
+            label={`Min ${noun}`}
+            value={d.def.minReps}
+            min={1}
+            onCommit={v => v != null && set({ minReps: v, reps: Math.max(v, d.def.reps) })}
+          />
+        </label>
+        <label className="field">
+          <span>Max {noun}</span>
+          <NumberField
+            label={`Max ${noun}`}
+            value={d.def.reps}
+            min={1}
+            onCommit={v => v != null && set({ reps: v, minReps: Math.min(v, d.def.minReps) })}
+          />
         </label>
         <label className="field">
           <span>Next weight ({unit})</span>
           <NumberField label="Next weight" value={d.weight} step={0.5} onCommit={v => v != null && setD(prev => ({ ...prev, weight: v }))} />
         </label>
         <label className="field">
-          <span>+ per success ({unit})</span>
+          <span>+ at top of range ({unit})</span>
           <NumberField label="Increment" value={d.def.increment} step={0.25} onCommit={v => v != null && set({ increment: v })} />
         </label>
       </div>
       <p className="muted small">
+        {d.def.minReps < d.def.reps
+          ? `Double progression: keep the weight and add ${noun} until every set reaches ${d.def.reps}, then add weight. `
+          : `Fixed target: add weight once every set reaches ${d.def.reps}. `}
         {d.def.equipment === 'barbell'
           ? 'Barbell lifts get warmup sets, the plate calculator and plate-rounded deloads.'
           : 'Use 0 for bodyweight exercises. No warmups or plate math.'}
@@ -115,7 +142,7 @@ function AddExerciseSheet({
           <li key={def.id}>
             <button className="pick-item" onClick={() => onPick(def.id)} aria-label={`Add ${def.name}`}>
               <span>{def.name}</span>
-              <span className="muted small">{def.sets}×{def.reps}{inProgram.has(def.id) ? ` · in ${state.program.A.includes(def.id) ? 'A' : 'B'}` : ''}</span>
+              <span className="muted small">{formatScheme(def)}{inProgram.has(def.id) ? ` · in ${state.program.A.includes(def.id) ? 'A' : 'B'}` : ''}</span>
             </button>
             {!isBuiltIn(def.id) && !inProgram.has(def.id) && (
               <button
@@ -159,7 +186,7 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
     setEditing({
       isNew: true,
       draft: {
-        def: { id: newId(), name: '', sets: 3, reps: 8, increment: defaultIncrement('', u), equipment: 'barbell' },
+        def: { id: newId(), name: '', sets: 3, reps: 10, minReps: 8, timed: false, perSide: false, increment: defaultIncrement('', u), equipment: 'barbell' },
         weight: startWeight('barbell', settings),
         addTo: workout,
       },
@@ -193,10 +220,10 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
               <button className="editor-item" onClick={() => openEdit(id)} aria-label={`Edit ${def.name}`}>
                 <span className="editor-name">
                   {def.name}
-                  {(lifts[id]?.failures ?? 0) > 0 && <span className="tag failed">{lifts[id].failures}× failed</span>}
+                  {(lifts[id]?.failures ?? 0) > 0 && <span className="tag failed">{lifts[id].failures}× stalled</span>}
                 </span>
                 <span className="muted small">
-                  {def.sets}×{def.reps} · {formatLoad(lifts[id]?.weight ?? 0, u, def.equipment)} · +{formatWeight(def.increment)}
+                  {formatScheme(def)} · {formatLoad(lifts[id]?.weight ?? 0, u, def.equipment)} · +{formatWeight(def.increment)}
                   {def.equipment === 'other' && ' · no barbell'}
                 </span>
               </button>

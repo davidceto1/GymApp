@@ -45,12 +45,17 @@ export function createWorkout(type: WorkoutType, state: ProgramState): Workout {
       .filter(id => exercises[id])
       .map(id => {
         const def = exercises[id];
+        const min = Math.min(def.minReps ?? def.reps, def.reps);
         return {
           id,
           name: def.name,
           equipment: def.equipment,
+          ...(def.timed && { timed: true }),
+          ...(def.perSide && { perSide: true }),
           weight: lifts[id]?.weight ?? startWeight(def.equipment, settings),
-          sets: Array.from({ length: def.sets }, () => ({ target: def.reps, reps: null })),
+          sets: Array.from({ length: def.sets }, () =>
+            min < def.reps ? { target: def.reps, min, reps: null } : { target: def.reps, reps: null },
+          ),
         };
       }),
     note: '',
@@ -60,22 +65,41 @@ export function createWorkout(type: WorkoutType, state: ProgramState): Workout {
   };
 }
 
-/** Tap cycle: empty → target → target−1 → … → 0 → empty. */
-export function nextReps(set: LoggedSet): number | null {
+/** Seconds removed per tap on a timed set. */
+export const TIMED_STEP = 5;
+
+/** Tap cycle: empty → target → target−step → … → 0 → empty. */
+export function nextReps(set: LoggedSet, step = 1): number | null {
   if (set.reps === null) return set.target;
   if (set.reps === 0) return null;
-  return set.reps - 1;
+  return Math.max(0, set.reps - step);
 }
 
+/** Bottom of a set's range; older workouts only stored the target. */
+export function setMin(set: LoggedSet): number {
+  return Math.min(set.min ?? set.target, set.target);
+}
+
+/** Logged below the bottom of the range. */
 export function isSetFailed(set: LoggedSet): boolean {
-  return set.reps !== null && set.reps < set.target;
+  return set.reps !== null && set.reps < setMin(set);
 }
 
-export type ExerciseOutcome = 'success' | 'failed' | 'skipped';
+/**
+ * success: every set hit the top of the range (time to add weight).
+ * progress: every set landed inside the range (keep the weight, build reps).
+ * failed: a set fell below the range or was left unlogged.
+ */
+export type ExerciseOutcome = 'success' | 'progress' | 'failed' | 'skipped';
 
 export function exerciseOutcome(ex: SessionExercise): ExerciseOutcome {
   if (ex.sets.every(s => s.reps === null)) return 'skipped';
-  return ex.sets.every(s => s.reps !== null && s.reps >= s.target) ? 'success' : 'failed';
+  if (ex.sets.every(s => s.reps !== null && s.reps >= s.target)) return 'success';
+  return ex.sets.every(s => s.reps !== null && s.reps >= setMin(s)) ? 'progress' : 'failed';
+}
+
+export function totalReps(ex: SessionExercise): number {
+  return ex.sets.reduce((sum, s) => sum + (s.reps ?? 0), 0);
 }
 
 export function hasLoggedSets(workout: Workout): boolean {
@@ -86,7 +110,12 @@ export function isWorkoutComplete(workout: Workout): boolean {
   return workout.exercises.every(ex => ex.sets.every(s => s.reps !== null));
 }
 
-/** Compute next-session lift state for one exercise. */
+/**
+ * Compute next-session lift state for one exercise (double progression):
+ * top of the range on every set → add weight; inside the range with more total reps than
+ * before at this weight → keep the weight; otherwise the session counts as a stall, and
+ * `failuresBeforeDeload` stalls in a row drop the weight by `deloadPercent`.
+ */
 export function progressLift(
   lift: LiftState | undefined,
   ex: SessionExercise,
@@ -98,14 +127,20 @@ export function progressLift(
   if (outcome === 'success') {
     return { weight: ex.weight + def.increment, failures: 0 };
   }
-  const failures = (lift && ex.weight === lift.weight ? lift.failures : 0) + 1;
+  const sameWeight = lift != null && ex.weight === lift.weight;
+  const best = sameWeight ? lift.bestReps : undefined;
+  const total = totalReps(ex);
+  const improved = outcome === 'progress' && (best == null || total > best);
+  const bestReps = outcome === 'progress' ? Math.max(best ?? 0, total) : best;
+  if (improved) return { weight: ex.weight, failures: 0, bestReps };
+  const failures = (sameWeight ? lift.failures : 0) + 1;
   if (failures >= settings.failuresBeforeDeload) {
     return {
       weight: roundForExercise(ex.weight * (1 - settings.deloadPercent / 100), def.equipment, def.increment, settings),
       failures: 0,
     };
   }
-  return { weight: ex.weight, failures };
+  return bestReps == null ? { weight: ex.weight, failures } : { weight: ex.weight, failures, bestReps };
 }
 
 export function finishWorkout(state: AppState, now: number): AppState {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { SessionExercise, Settings } from '../types';
 import { formatWeight, warmupSets } from '../logic/weights';
+import { formatTarget } from '../logic/program';
+import { isSetFailed, setMin } from '../logic/workout';
 import { formatLoad } from './format';
 
 interface ExerciseCardProps {
@@ -16,7 +18,9 @@ export function ExerciseCard({ exercise, settings, onTapSet, onOpenWeight }: Exe
   const name = exercise.name;
   const barbell = exercise.equipment === 'barbell';
   const warmups = barbell ? warmupSets(exercise.weight, settings) : [];
-  const target = exercise.sets[0]?.target ?? 5;
+  const first = exercise.sets[0];
+  const scheme = formatTarget(first?.target ?? 5, first ? setMin(first) : undefined, exercise);
+  const unitWord = exercise.timed ? 'seconds' : 'reps';
   const u = settings.unit;
 
   return (
@@ -24,7 +28,7 @@ export function ExerciseCard({ exercise, settings, onTapSet, onOpenWeight }: Exe
       <header className="exercise-header">
         <h2 className="exercise-name">{name}</h2>
         <button className="exercise-weight" onClick={onOpenWeight} aria-label={`${name} weight and plates`}>
-          {exercise.sets.length}×{target} {formatLoad(exercise.weight, u, exercise.equipment)} <span aria-hidden="true">›</span>
+          {exercise.sets.length}×{scheme} {formatLoad(exercise.weight, u, exercise.equipment)} <span aria-hidden="true">›</span>
         </button>
       </header>
 
@@ -40,12 +44,16 @@ export function ExerciseCard({ exercise, settings, onTapSet, onOpenWeight }: Exe
       {tab === 'work' || !barbell ? (
         <div className="sets-row">
           {exercise.sets.map((set, i) => {
-            const state = set.reps === null ? 'empty' : set.reps >= set.target ? 'done' : 'failed';
+            const state =
+              set.reps === null ? 'empty'
+              : set.reps >= set.target ? 'done'
+              : isSetFailed(set) ? 'failed'
+              : 'in-range';
             return (
               <button
                 key={i}
                 className={`set-circle ${state}`}
-                aria-label={`Set ${i + 1}: ${set.reps === null ? 'not logged' : `${set.reps} reps`}`}
+                aria-label={`Set ${i + 1}: ${set.reps === null ? 'not logged' : `${set.reps} ${unitWord}${exercise.perSide ? ' per side' : ''}`}`}
                 onClick={() => onTapSet(i)}
               >
                 {set.reps ?? set.target}
