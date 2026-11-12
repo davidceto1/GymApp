@@ -54,6 +54,8 @@ function exerciseFromRow(r: ExerciseRow): ExerciseDef {
 export interface WorkoutRow {
   id: string;
   type: WorkoutType;
+  /** Null on workouts logged before workouts had names. */
+  name: string | null;
   unit: Unit;
   started_at: string | null;
   finished_at: string | null;
@@ -88,6 +90,7 @@ export function stateToRows(state: AppState): Rows {
         {
           id: w.id,
           type: w.type,
+          name: w.name ?? null,
           unit: w.unit,
           started_at: toIso(w.startedAt),
           finished_at: toIso(w.finishedAt),
@@ -104,6 +107,7 @@ export function workoutFromRow(r: WorkoutRow): Workout {
   return {
     id: r.id,
     type: r.type,
+    ...(r.name != null && { name: r.name }),
     unit: r.unit,
     startedAt: toMs(r.started_at),
     finishedAt: toMs(r.finished_at),
@@ -125,7 +129,7 @@ export function rowsToState(userState: UserStateRow, exercises: ExerciseRow[], w
     exercises: Object.fromEntries(exercises.map(e => [e.id, exerciseFromRow(e)])),
     program: userState.program,
     lifts: userState.lifts,
-    nextType: userState.next_type === 'B' ? 'B' : 'A',
+    nextType: userState.next_type,
     history: workouts.map(workoutFromRow).sort((a, b) => workoutTime(b) - workoutTime(a)),
     current: userState.current,
   });

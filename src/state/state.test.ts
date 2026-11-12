@@ -7,6 +7,11 @@ function run(state: AppState, ...actions: Action[]): AppState {
   return actions.reduce(reducer, state);
 }
 
+/** Exercise ids of workout `id` in the program. */
+function ids(state: AppState, id: string): string[] | undefined {
+  return state.program.find(w => w.id === id)?.exercises;
+}
+
 function logAll(state: AppState, reps = 5): AppState {
   let s = state;
   s.current.exercises.forEach((ex, i) =>
@@ -69,10 +74,13 @@ describe('reducer', () => {
     expect(s.current.breakDeloadHandled).toBe(true);
   });
 
-  it('switches workout type only before any set is logged', () => {
-    let s = run(initialState(), { type: 'switchWorkoutType' });
+  it('picks a different workout only before any set is logged', () => {
+    let s = run(initialState(), { type: 'selectWorkout', id: 'B' });
     expect(s.current.type).toBe('B');
-    s = run(s, { type: 'tapSet', exercise: 0, set: 0, now: 1 }, { type: 'switchWorkoutType' });
+    expect(s.current.name).toBe('Workout B');
+    expect(s.nextType).toBe('B');
+    expect(run(s, { type: 'selectWorkout', id: 'Z' })).toBe(s);
+    s = run(s, { type: 'tapSet', exercise: 0, set: 0, now: 1 }, { type: 'selectWorkout', id: 'A' });
     expect(s.current.type).toBe('B');
   });
 
@@ -112,19 +120,19 @@ describe('workout editor', () => {
   it('creates an exercise and adds it to a workout', () => {
     let s = run(initialState(), { type: 'saveExercise', exercise: pullups, weight: 0 });
     expect(s.lifts.pullups).toEqual({ weight: 0, failures: 0 });
-    s = run(s, { type: 'setProgram', workout: 'A', ids: [...s.program.A, 'pullups'] });
-    expect(s.program.A).toEqual(['squat', 'bench', 'row', 'pullups']);
+    s = run(s, { type: 'setProgram', workout: 'A', ids: [...ids(s, 'A')!, 'pullups'] });
+    expect(ids(s, 'A')).toEqual(['squat', 'bench', 'row', 'pullups']);
     // The untouched current workout picks up the change right away.
     expect(s.current.exercises.map(e => e.name)).toEqual(['Squat', 'Bench Press', 'Barbell Row', 'Pull-ups']);
     expect(s.current.exercises[3].sets).toHaveLength(3);
   });
 
-  it('reorders and removes exercises but never empties a workout', () => {
+  it('reorders and removes exercises, dropping duplicates and unknown ids', () => {
     let s = run(initialState(), { type: 'setProgram', workout: 'B', ids: ['deadlift', 'squat'] });
-    expect(s.program.B).toEqual(['deadlift', 'squat']);
-    expect(run(s, { type: 'setProgram', workout: 'B', ids: [] }).program.B).toEqual(['deadlift', 'squat']);
+    expect(ids(s, 'B')).toEqual(['deadlift', 'squat']);
     s = run(s, { type: 'setProgram', workout: 'B', ids: ['squat', 'squat', 'nope'] });
-    expect(s.program.B).toEqual(['squat']);
+    expect(ids(s, 'B')).toEqual(['squat']);
+    expect(ids(run(s, { type: 'setProgram', workout: 'B', ids: [] }), 'B')).toEqual([]);
   });
 
   it('edits sets, reps and increment of an existing exercise', () => {
@@ -144,7 +152,7 @@ describe('workout editor', () => {
     s = run(s, { type: 'setProgram', workout: 'A', ids: ['deadlift'] });
     expect(s.current.exercises.map(e => e.id)).toEqual(['squat', 'bench', 'row']);
     s = reducer(s, { type: 'finishWorkout', now: 2 });
-    s = run(s, { type: 'switchWorkoutType' });
+    s = run(s, { type: 'selectWorkout', id: 'A' });
     expect(s.current.exercises.map(e => e.id)).toEqual(['deadlift']);
   });
 
@@ -167,8 +175,94 @@ describe('workout editor', () => {
   it('restores the StrongLifts program with a preset, keeping weights', () => {
     let s = run(initialState(), { type: 'setLift', id: 'squat', lift: { weight: 100 } });
     s = run(s, { type: 'setProgram', workout: 'A', ids: ['deadlift'] }, { type: 'applyPreset', preset: '5x5' });
-    expect(s.program).toEqual({ A: ['squat', 'bench', 'row'], B: ['squat', 'ohp', 'deadlift'] });
+    expect(s.program).toEqual([
+      { id: 'A', name: 'Workout A', exercises: ['squat', 'bench', 'row'] },
+      { id: 'B', name: 'Workout B', exercises: ['squat', 'ohp', 'deadlift'] },
+    ]);
     expect(s.lifts.squat.weight).toBe(100);
+  });
+});
+
+describe('configurable workouts', () => {
+  const finishAll = (s: AppState, now: number) => reducer(logAll(s), { type: 'finishWorkout', now });
+
+  it('runs a single workout every session', () => {
+    let s = run(initialState(), { type: 'removeWorkout', id: 'B' });
+    expect(s.program.map(w => w.id)).toEqual(['A']);
+    expect(run(s, { type: 'removeWorkout', id: 'A' })).toBe(s);
+    s = finishAll(s, 1);
+    expect(s.current.type).toBe('A');
+    expect(s.nextType).toBe('A');
+  });
+
+  it('adds up to five workouts and rotates through them in order', () => {
+    let s = run(initialState(), { type: 'addWorkout' }, { type: 'addWorkout' }, { type: 'addWorkout' });
+    expect(s.program.map(w => w.id)).toEqual(['A', 'B', 'C', 'D', 'E']);
+    expect(s.program[2]).toEqual({ id: 'C', name: 'Workout C', exercises: [] });
+    expect(run(s, { type: 'addWorkout' })).toBe(s);
+    for (const id of ['C', 'D', 'E']) s = run(s, { type: 'setProgram', workout: id, ids: ['squat'] });
+
+    const order: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      order.push(s.current.type);
+      s = finishAll(s, i + 1);
+    }
+    expect(order).toEqual(['A', 'B', 'C', 'D', 'E', 'A']);
+    expect(s.history.map(w => w.name)).toEqual(['Workout A', 'Workout E', 'Workout D', 'Workout C', 'Workout B', 'Workout A']);
+  });
+
+  it('reuses a freed id after a workout is removed', () => {
+    const s = run(initialState(), { type: 'addWorkout' }, { type: 'removeWorkout', id: 'B' }, { type: 'addWorkout' });
+    expect(s.program.map(w => w.id)).toEqual(['A', 'C', 'B']);
+  });
+
+  it('renames a workout, updating the untouched session but not history', () => {
+    let s = finishAll(initialState(), 1);
+    s = run(s, { type: 'renameWorkout', id: 'A', name: 'Lower' }, { type: 'renameWorkout', id: 'B', name: 'Upper' });
+    expect(s.current.name).toBe('Upper');
+    expect(s.history[0].name).toBe('Workout A');
+    s = finishAll(s, 2);
+    expect(s.current.name).toBe('Lower');
+  });
+
+  it('reorders the rotation', () => {
+    let s = run(initialState(), { type: 'addWorkout' }, { type: 'setProgram', workout: 'C', ids: ['row'] });
+    s = run(s, { type: 'moveWorkout', id: 'C', dir: -1 });
+    expect(s.program.map(w => w.id)).toEqual(['A', 'C', 'B']);
+    expect(run(s, { type: 'moveWorkout', id: 'A', dir: -1 })).toBe(s);
+    s = finishAll(s, 1);
+    expect(s.current.type).toBe('C');
+  });
+
+  it('moves on to the next workout when the planned one is removed', () => {
+    let s = run(initialState(), { type: 'addWorkout' }, { type: 'setProgram', workout: 'C', ids: ['row'] });
+    s = finishAll(s, 1);
+    expect(s.current.type).toBe('B');
+    s = run(s, { type: 'removeWorkout', id: 'B' });
+    expect(s.current.type).toBe('C');
+    expect(s.nextType).toBe('C');
+    expect(s.current.exercises.map(e => e.id)).toEqual(['row']);
+  });
+
+  it('keeps an in-progress session when its workout is removed, then restarts the rotation', () => {
+    let s = run(initialState(), { type: 'addWorkout' }, { type: 'tapSet', exercise: 0, set: 0, now: 1 });
+    s = run(s, { type: 'removeWorkout', id: 'A' });
+    expect(s.current.type).toBe('A');
+    s = reducer(s, { type: 'finishWorkout', now: 2 });
+    expect(s.current.type).toBe('B');
+  });
+
+  it('presets replace every workout and keep a valid next workout', () => {
+    let s = run(
+      initialState(),
+      { type: 'addWorkout' },
+      { type: 'setProgram', workout: 'C', ids: ['row'] },
+      { type: 'selectWorkout', id: 'C' },
+    );
+    s = run(s, { type: 'applyPreset', preset: '5x5' });
+    expect(s.program.map(w => w.id)).toEqual(['A', 'B']);
+    expect(s.nextType).toBe('A');
+    expect(s.current.type).toBe('A');
   });
 });
 
@@ -185,6 +279,22 @@ describe('storage', () => {
   it('falls back to a fresh state on corrupt storage', () => {
     localStorage.setItem(STORAGE_KEY, '{nope');
     expect(loadState().history).toEqual([]);
+  });
+
+  it('reads the old { A, B } program and validates workout lists', () => {
+    const old = JSON.parse(JSON.stringify(initialState()));
+    old.program = { A: ['squat'], B: ['deadlift'] };
+    expect(parseState(old).program).toEqual([
+      { id: 'A', name: 'Workout A', exercises: ['squat'] },
+      { id: 'B', name: 'Workout B', exercises: ['deadlift'] },
+    ]);
+    const bad = (program: unknown) => () => parseState({ ...initialState(), program });
+    expect(bad([])).toThrow();
+    expect(bad(['A', 'B', 'C', 'D', 'E', 'F'].map(id => ({ id, name: id, exercises: [] })))).toThrow();
+    expect(bad([{ id: 'A', name: 'A', exercises: [] }, { id: 'A', name: 'A2', exercises: [] }])).toThrow();
+    expect(bad([{ id: 'A', name: 'A', exercises: ['nope'] }])).toThrow();
+    const one = parseState({ ...initialState(), program: [{ id: 'C', name: 'Full body', exercises: ['squat'] }], nextType: 'A' });
+    expect(one.nextType).toBe('C');
   });
 
   it('rejects malformed imports', () => {
@@ -216,7 +326,13 @@ describe('storage', () => {
     };
     const s = parseState(v1);
     expect(s.version).toBe(2);
-    expect(s.program).toEqual({ A: ['squat', 'bench', 'row'], B: ['squat', 'ohp', 'deadlift'] });
+    expect(s.program.map(w => [w.id, w.name, w.exercises])).toEqual([
+      ['A', 'Workout A', ['squat', 'bench', 'row']],
+      ['B', 'Workout B', ['squat', 'ohp', 'deadlift']],
+    ]);
+    expect(s.nextType).toBe('B');
+    expect(s.current.name).toBe('Workout B');
+    expect(s.history[0].name).toBeUndefined();
     expect(s.exercises.bench).toMatchObject({ name: 'Bench Press', sets: 3, reps: 5, increment: 1.25, equipment: 'barbell' });
     expect(s.exercises.deadlift.sets).toBe(1);
     expect(s.lifts.bench).toEqual({ weight: 50, failures: 1 });
@@ -231,7 +347,7 @@ describe('storage', () => {
     const csv = historyToCsv(s.history);
     const lines = csv.trim().split('\n');
     expect(lines[0]).toBe('Date,Workout,Exercise,Weight,Unit,Reps,Body Weight,Note');
-    expect(lines[1]).toBe('2026-01-02,A,Squat,20,kg,5/5/5/5/5,,"heavy, ""tough"""');
+    expect(lines[1]).toBe('2026-01-02,Workout A,Squat,20,kg,5/5/5/5/5,,"heavy, ""tough"""');
     expect(lines).toHaveLength(4);
   });
 });
