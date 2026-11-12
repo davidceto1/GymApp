@@ -2,7 +2,7 @@ import { useState, type Dispatch } from 'react';
 import type { AppState } from '../types';
 import type { Action } from '../state/reducer';
 import { formatWeight } from '../logic/weights';
-import { nextWorkoutId, workoutDefName, workoutLabel } from '../logic/program';
+import { workoutDefName, workoutLabel } from '../logic/program';
 import {
   breakDeloadPercent,
   daysSinceLastWorkout,
@@ -18,12 +18,13 @@ import { useNow } from './useNow';
 interface WorkoutScreenProps {
   state: AppState;
   dispatch: Dispatch<Action>;
+  /** Called with the id of the workout that was just saved to history. */
+  onFinished?: (id: string) => void;
 }
 
-export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
+export function WorkoutScreen({ state, dispatch, onFinished }: WorkoutScreenProps) {
   const { current: workout, settings } = state;
   const [weightSheet, setWeightSheet] = useState<number | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
   const now = useNow(workout.startedAt != null);
   const started = hasLoggedSets(workout);
   const complete = isWorkoutComplete(workout);
@@ -35,10 +36,8 @@ export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
     if (!complete && !window.confirm('Some sets are not logged. Unlogged exercises are skipped and partly logged ones count as failed. Finish anyway?')) {
       return;
     }
-    const finishedAt = Date.now();
-    const next = workoutDefName(state.program, nextWorkoutId(state.program, workout.type));
-    dispatch({ type: 'finishWorkout', now: finishedAt });
-    setSummary(`${workoutLabel(workout)} saved. Next up: ${next}.`);
+    dispatch({ type: 'finishWorkout', now: Date.now() });
+    onFinished?.(workout.id);
   };
 
   const editing = weightSheet != null ? workout.exercises[weightSheet] : null;
@@ -69,13 +68,6 @@ export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
 
       {workout.exercises.length === 0 && (
         <p className="card muted">This workout has no exercises yet. Add some in Settings → Workouts.</p>
-      )}
-
-      {summary && (
-        <div className="banner success" role="status">
-          <span>{summary}</span>
-          <button className="icon-btn" aria-label="Dismiss" onClick={() => setSummary(null)}>✕</button>
-        </div>
       )}
 
       {deload > 0 && (
