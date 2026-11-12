@@ -7,6 +7,8 @@ import { HistoryScreen } from './ui/HistoryScreen';
 import { ProgressScreen } from './ui/ProgressScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
 import { RestTimer } from './ui/RestTimer';
+import { HoldTimer } from './ui/HoldTimer';
+import { setMin } from './logic/workout';
 import { useCloudSync } from './sync/useCloudSync';
 
 const TABS = [
@@ -48,6 +50,10 @@ function App() {
     }
   }, [summaryId]);
 
+  const holdMarks = [...new Set(
+    state.current.exercises.filter(ex => ex.timed).flatMap(ex => ex.sets.flatMap(s => [setMin(s), s.target])),
+  )].sort((x, y) => x - y);
+
   const showSummary = summaryId != null && state.history.some(w => w.id === summaryId);
 
   const cloud = useCloudSync(state, dispatch);
@@ -78,6 +84,9 @@ function App() {
       </main>
 
       <div className="app-bottom">
+        <div className="hold-wrap" hidden={tab !== 'workout'}>
+          <HoldTimer marks={holdMarks} sound={state.settings.sound} />
+        </div>
         {state.current.rest && (
           <RestTimer
             rest={state.current.rest}

@@ -160,6 +160,42 @@ describe('Rest timer', () => {
   });
 });
 
+describe('Hold timer', () => {
+  it('runs independently of sets, pauses, resets and beeps at hold targets', () => {
+    let s = initialState();
+    s = reducer(s, { type: 'saveExercise', exercise: { id: 'plank', name: 'Plank', sets: 2, reps: 45, minReps: 30, timed: true, perSide: false, increment: 0, equipment: 'other' } });
+    s = reducer(s, { type: 'setProgram', workout: 'A', ids: [...s.program[0].exercises, 'plank'] });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Hold timer' }));
+      const timer = within(screen.getByRole('timer', { name: 'Hold timer' }));
+      fireEvent.click(timer.getByRole('button', { name: 'Start' }));
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(timer.getByText('0:10')).toBeInTheDocument();
+      expect(timer.getByText('Hold · beeps at 0:30')).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(21_000));
+      expect(vibrate).toHaveBeenCalledTimes(1);
+      expect(timer.getByText('Hold · beeps at 0:45')).toBeInTheDocument();
+      fireEvent.click(timer.getByRole('button', { name: 'Pause' }));
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(timer.getByText('0:31')).toBeInTheDocument();
+      // No set was logged and no rest timer started.
+      expect(screen.queryByRole('timer', { name: '' })).toBeNull();
+      fireEvent.click(timer.getByRole('button', { name: 'Minimize hold timer' }));
+      expect(screen.getByRole('button', { name: 'Hold timer 0:31' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Hold timer 0:31' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+      expect(screen.getByText('0:00')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('Other screens', () => {
   async function finishOne(user: ReturnType<typeof userEvent.setup>) {
     await completeAllSets(user);
