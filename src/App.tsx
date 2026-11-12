@@ -10,6 +10,7 @@ import { RestTimer } from './ui/RestTimer';
 import { HoldTimer } from './ui/HoldTimer';
 import { setMin } from './logic/workout';
 import { useCloudSync } from './sync/useCloudSync';
+import { useWakeLock } from './ui/useWakeLock';
 
 const TABS = [
   { id: 'workout', label: 'Workout', icon: 'M6 10v4M18 10v4M3 11v2M21 11v2M6 12h12' },
@@ -57,6 +58,8 @@ function App() {
   const showSummary = summaryId != null && state.history.some(w => w.id === summaryId);
 
   const cloud = useCloudSync(state, dispatch);
+  // Keep the screen on from the first logged set until the workout is finished.
+  useWakeLock(state.current.startedAt != null);
 
   useEffect(() => saveState(state), [state]);
 
