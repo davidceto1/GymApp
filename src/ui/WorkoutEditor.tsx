@@ -1,7 +1,17 @@
 import { useState, type Dispatch } from 'react';
 import type { AppState, Equipment, ExerciseDef, ExerciseId, WorkoutType } from '../types';
 import type { Action } from '../state/reducer';
-import { defaultIncrement, formatScheme, isBuiltIn, startWeight } from '../logic/program';
+import {
+  MAX_WORKOUTS,
+  defaultIncrement,
+  findWorkoutDef,
+  formatScheme,
+  isBuiltIn,
+  programExerciseIds,
+  startWeight,
+  unusedWorkoutId,
+  workoutDefName,
+} from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import { newId } from '../logic/workout';
 import { NumberField, Sheet } from './common';
@@ -128,13 +138,16 @@ function AddExerciseSheet({
   onDelete: (id: ExerciseId) => void;
   onClose: () => void;
 }) {
-  const inProgram = new Set([...state.program.A, ...state.program.B]);
+  const inProgram = programExerciseIds(state.program);
+  const current = findWorkoutDef(state.program, workout)?.exercises ?? [];
+  const usedIn = (id: ExerciseId) =>
+    state.program.filter(w => w.exercises.includes(id)).map(w => workoutDefName(state.program, w.id)).join(', ');
   const available = Object.values(state.exercises)
-    .filter(def => !state.program[workout].includes(def.id))
+    .filter(def => !current.includes(def.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <Sheet title={`Add to workout ${workout}`} onClose={onClose}>
+    <Sheet title={`Add to ${workoutDefName(state.program, workout)}`} onClose={onClose}>
       <button className="btn primary wide-block" onClick={onCreate}>+ Create new exercise</button>
       {available.length > 0 && <h3 className="section-label">Your exercises</h3>}
       <ul className="pick-list">
@@ -142,7 +155,7 @@ function AddExerciseSheet({
           <li key={def.id}>
             <button className="pick-item" onClick={() => onPick(def.id)} aria-label={`Add ${def.name}`}>
               <span>{def.name}</span>
-              <span className="muted small">{formatScheme(def)}{inProgram.has(def.id) ? ` · in ${state.program.A.includes(def.id) ? 'A' : 'B'}` : ''}</span>
+              <span className="muted small">{formatScheme(def)}{inProgram.has(def.id) ? ` · in ${usedIn(def.id)}` : ''}</span>
             </button>
             {!isBuiltIn(def.id) && !inProgram.has(def.id) && (
               <button
@@ -161,12 +174,25 @@ function AddExerciseSheet({
 }
 
 export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: Dispatch<Action> }) {
-  const [workout, setWorkout] = useState<WorkoutType>('A');
+  const [selected, setWorkout] = useState<WorkoutType>(state.current.type);
   const [editing, setEditing] = useState<{ draft: Draft; isNew: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
-  const { settings, exercises, lifts } = state;
+  const { settings, exercises, lifts, program } = state;
   const u = settings.unit;
-  const ids = state.program[workout];
+  // The selected workout may have just been removed: fall back to the first one.
+  const workoutDef = findWorkoutDef(program, selected) ?? program[0];
+  const workout = workoutDef.id;
+  const ids = workoutDef.exercises;
+  const workoutIndex = program.indexOf(workoutDef);
+  const label = workoutDefName(program, workout);
+
+  const addWorkout = () => {
+    // The reducer gives the new workout this same id; select it so it can be filled in right away.
+    const id = unusedWorkoutId(program);
+    if (!id) return;
+    dispatch({ type: 'addWorkout' });
+    setWorkout(id);
+  };
 
   const setIds = (next: ExerciseId[]) => dispatch({ type: 'setProgram', workout, ids: next });
   const move = (i: number, dir: -1 | 1) => {
@@ -195,7 +221,7 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
 
   const save = ({ def, weight, addTo }: Draft) => {
     dispatch({ type: 'saveExercise', exercise: def, weight });
-    if (addTo) dispatch({ type: 'setProgram', workout: addTo, ids: [...state.program[addTo], def.id] });
+    if (addTo) dispatch({ type: 'setProgram', workout: addTo, ids: [...(findWorkoutDef(program, addTo)?.exercises ?? []), def.id] });
     setEditing(null);
   };
 
@@ -203,16 +229,67 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
     <section className="card">
       <div className="card-title-row">
         <h2 className="card-title">Workouts</h2>
-        <div className="segmented" role="radiogroup" aria-label="Workout to edit">
-          {(['A', 'B'] as const).map(t => (
-            <button key={t} role="radio" aria-checked={workout === t} onClick={() => setWorkout(t)}>
-              Workout {t}
+        <button className="btn small" disabled={program.length >= MAX_WORKOUTS} onClick={addWorkout}>
+          + Add workout
+        </button>
+      </div>
+      <p className="muted small">
+        {program.length === 1
+          ? 'You do the same workout every session.'
+          : `Workouts rotate in this order: ${program.map(w => workoutDefName(program, w.id)).join(' → ')}, then repeat.`}
+      </p>
+      {program.length > 1 && (
+        <div className="segmented wrap" role="radiogroup" aria-label="Workout to edit">
+          {program.map(w => (
+            <button key={w.id} role="radio" aria-checked={workout === w.id} onClick={() => setWorkout(w.id)}>
+              {workoutDefName(program, w.id)}
             </button>
           ))}
         </div>
+      )}
+
+      <div className="workout-meta">
+        <input
+          className="input"
+          aria-label="Workout name"
+          value={workoutDef.name}
+          placeholder={`Workout ${workout}`}
+          maxLength={40}
+          onChange={e => dispatch({ type: 'renameWorkout', id: workout, name: e.target.value })}
+        />
+        {program.length > 1 && (
+          <>
+            <button
+              className="icon-btn"
+              aria-label={`Move ${label} earlier`}
+              disabled={workoutIndex === 0}
+              onClick={() => dispatch({ type: 'moveWorkout', id: workout, dir: -1 })}
+            >
+              ←
+            </button>
+            <button
+              className="icon-btn"
+              aria-label={`Move ${label} later`}
+              disabled={workoutIndex === program.length - 1}
+              onClick={() => dispatch({ type: 'moveWorkout', id: workout, dir: 1 })}
+            >
+              →
+            </button>
+            <button
+              className="icon-btn"
+              aria-label={`Delete ${label}`}
+              onClick={() =>
+                window.confirm(`Delete ${label}? Past sessions stay in your history and your weights are kept.`) &&
+                dispatch({ type: 'removeWorkout', id: workout })
+              }
+            >
+              🗑
+            </button>
+          </>
+        )}
       </div>
 
-      <ol className="editor-list" aria-label={`Workout ${workout} exercises`}>
+      <ol className="editor-list" aria-label={`${label} exercises`}>
         {ids.map((id, i) => {
           const def = exercises[id];
           return (
@@ -232,8 +309,7 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
                 <button className="icon-btn" aria-label={`Move ${def.name} down`} disabled={i === ids.length - 1} onClick={() => move(i, 1)}>↓</button>
                 <button
                   className="icon-btn"
-                  aria-label={`Remove ${def.name} from workout ${workout}`}
-                  disabled={ids.length === 1}
+                  aria-label={`Remove ${def.name} from ${label}`}
                   onClick={() => setIds(ids.filter(x => x !== id))}
                 >
                   ✕
@@ -244,7 +320,8 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
         })}
       </ol>
 
-      <button className="btn wide-block" onClick={() => setAdding(true)}>+ Add exercise to workout {workout}</button>
+      {ids.length === 0 && <p className="muted small">No exercises yet.</p>}
+      <button className="btn wide-block" onClick={() => setAdding(true)}>+ Add exercise to {label}</button>
 
       <p className="muted small">
         Changes apply to your next workout that hasn't started. Tap an exercise to change its sets, reps, weight or increment.
@@ -252,13 +329,13 @@ export function WorkoutEditor({ state, dispatch }: { state: AppState; dispatch: 
       <div className="button-row">
         <button
           className="btn small"
-          onClick={() => window.confirm('Reset workouts A and B to StrongLifts 5×5? Your weights are kept.') && dispatch({ type: 'applyPreset', preset: '5x5' })}
+          onClick={() => window.confirm('Replace all your workouts with StrongLifts 5×5 (Workout A and B)? Your weights are kept.') && dispatch({ type: 'applyPreset', preset: '5x5' })}
         >
           Reset to StrongLifts 5×5
         </button>
         <button
           className="btn small"
-          onClick={() => window.confirm('Switch workouts A and B to StrongLifts 3×5? Your weights are kept.') && dispatch({ type: 'applyPreset', preset: '3x5' })}
+          onClick={() => window.confirm('Replace all your workouts with StrongLifts 3×5 (Workout A and B)? Your weights are kept.') && dispatch({ type: 'applyPreset', preset: '3x5' })}
         >
           Use StrongLifts 3×5
         </button>

@@ -2,6 +2,7 @@ import { useState, type Dispatch } from 'react';
 import type { AppState } from '../types';
 import type { Action } from '../state/reducer';
 import { formatWeight } from '../logic/weights';
+import { nextWorkoutId, workoutDefName, workoutLabel } from '../logic/program';
 import {
   breakDeloadPercent,
   daysSinceLastWorkout,
@@ -35,9 +36,9 @@ export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
       return;
     }
     const finishedAt = Date.now();
-    const next = workout.type === 'A' ? 'B' : 'A';
+    const next = workoutDefName(state.program, nextWorkoutId(state.program, workout.type));
     dispatch({ type: 'finishWorkout', now: finishedAt });
-    setSummary(`Workout ${workout.type} saved. Next up: Workout ${next}.`);
+    setSummary(`${workoutLabel(workout)} saved. Next up: ${next}.`);
   };
 
   const editing = weightSheet != null ? workout.exercises[weightSheet] : null;
@@ -46,18 +47,29 @@ export function WorkoutScreen({ state, dispatch }: WorkoutScreenProps) {
     <div className="screen workout-screen">
       <header className="screen-header">
         <div>
-          <h1>Workout {workout.type}</h1>
+          <h1>{workoutLabel(workout)}</h1>
           <p className="muted">
             {formatDate(workout.startedAt ?? now)}
             {workout.startedAt != null && <> · <span aria-label="Workout duration">{formatClock((now - workout.startedAt) / 1000)}</span></>}
           </p>
         </div>
-        {!started && (
-          <button className="btn small" onClick={() => dispatch({ type: 'switchWorkoutType' })}>
-            Switch to {workout.type === 'A' ? 'B' : 'A'}
-          </button>
+        {!started && state.program.length > 1 && (
+          <select
+            className="input workout-picker"
+            aria-label="Choose workout"
+            value={workout.type}
+            onChange={e => dispatch({ type: 'selectWorkout', id: e.target.value })}
+          >
+            {state.program.map(w => (
+              <option key={w.id} value={w.id}>{workoutDefName(state.program, w.id)}</option>
+            ))}
+          </select>
         )}
       </header>
+
+      {workout.exercises.length === 0 && (
+        <p className="card muted">This workout has no exercises yet. Add some in Settings → Workouts.</p>
+      )}
 
       {summary && (
         <div className="banner success" role="status">

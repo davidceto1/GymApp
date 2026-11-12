@@ -34,6 +34,26 @@ describe('cloud rows', () => {
     expect(isEmptyDiff(diffRows(stateToRows(state), stateToRows(back)))).toBe(true);
   });
 
+  it('round-trips configurable workouts and workout names', () => {
+    let state = reducer(initialState(), { type: 'addWorkout' });
+    state = reducer(state, { type: 'setProgram', workout: 'C', ids: ['row'] });
+    state = reducer(state, { type: 'renameWorkout', id: 'C', name: 'Pull day' });
+    state = withWorkouts(3, state);
+    expect(state.current.type).toBe('A');
+    const rows = stateToRows(state);
+    expect(rows.workouts[state.history[0].id]).toMatchObject({ type: 'C', name: 'Pull day' });
+    const back = roundTrip(state);
+    expect(back.program).toEqual(state.program);
+    expect(back.history.map(w => w.name)).toEqual(['Pull day', 'Workout B', 'Workout A']);
+    expect(isEmptyDiff(diffRows(rows, stateToRows(back)))).toBe(true);
+
+    // Rows written before workouts had names, with the old { A, B } program.
+    const old = { ...rows.userState, program: { A: ['squat'], B: ['deadlift'] } as unknown as AppState['program'] };
+    const legacy = rowsToState(old, Object.values(rows.exercises), Object.values(rows.workouts).map(w => ({ ...w, name: null })));
+    expect(legacy.program.map(w => w.id)).toEqual(['A', 'B']);
+    expect(legacy.history[0].name).toBeUndefined();
+  });
+
   it('round-trips rep ranges, timed and per-side exercises', () => {
     const plank = { id: 'plank', name: 'Plank', sets: 3, reps: 45, minReps: 30, timed: true, perSide: false, increment: 0, equipment: 'other' as const };
     const stepUp = { id: 'stepup', name: 'Step-up', sets: 3, reps: 10, minReps: 8, timed: false, perSide: true, increment: 2, equipment: 'other' as const };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PROGRAM, defaultExercises, defaultLifts, defaultSettings, formatScheme } from './program';
+import { defaultProgram, defaultExercises, defaultLifts, defaultSettings, formatScheme } from './program';
 import {
   convertWeight,
   plateBreakdown,
@@ -20,7 +20,7 @@ import type { ExerciseDef, SessionExercise } from '../types';
 
 const kg = defaultSettings('kg');
 const defs = defaultExercises('kg');
-const programState = { program: DEFAULT_PROGRAM, exercises: defs, lifts: defaultLifts('kg'), settings: kg };
+const programState = { program: defaultProgram(), exercises: defs, lifts: defaultLifts('kg'), settings: kg };
 
 function ex(id: string, weight: number, reps: (number | null)[]): SessionExercise {
   return { id, name: id, equipment: 'barbell', weight, sets: reps.map(r => ({ target: 5, reps: r })) };
@@ -53,7 +53,7 @@ describe('program', () => {
     const w = createWorkout('A', {
       ...programState,
       exercises: { ...defs, dips },
-      program: { A: ['dips', 'squat'], B: ['deadlift'] },
+      program: [{ id: 'A', name: 'Workout A', exercises: ['dips', 'squat'] }],
     });
     expect(w.exercises.map(e => e.id)).toEqual(['dips', 'squat']);
     expect(w.exercises[0]).toMatchObject({ name: 'Dips', equipment: 'other', weight: 0 });
@@ -61,7 +61,7 @@ describe('program', () => {
   });
 
   it('skips program entries whose exercise no longer exists', () => {
-    const w = createWorkout('A', { ...programState, program: { A: ['gone', 'squat'], B: ['squat'] } });
+    const w = createWorkout('A', { ...programState, program: [{ id: 'A', name: 'Workout A', exercises: ['gone', 'squat'] }] });
     expect(w.exercises.map(e => e.id)).toEqual(['squat']);
   });
 });
@@ -129,7 +129,7 @@ describe('rep ranges (double progression)', () => {
   });
 
   it('builds sets with the top of the range as the tap target', () => {
-    const w = createWorkout('A', { ...programState, exercises: { ...defs, press }, program: { A: ['press'], B: ['squat'] } });
+    const w = createWorkout('A', { ...programState, exercises: { ...defs, press }, program: [{ id: 'A', name: 'Workout A', exercises: ['press'] }] });
     expect(w.exercises[0].sets).toEqual([{ target: 8, min: 6, reps: null }, { target: 8, min: 6, reps: null }, { target: 8, min: 6, reps: null }]);
   });
 

@@ -106,10 +106,12 @@ describe('Workout screen', () => {
     expect(card('Squat').getByRole('button', { name: /weight/ })).toHaveTextContent('90kg');
   });
 
-  it('can switch between A and B before starting', async () => {
+  it('can pick another workout before starting', async () => {
     const user = setup();
-    await user.click(screen.getByRole('button', { name: 'Switch to B' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Choose workout' }), 'Workout B');
     expect(screen.getByRole('heading', { name: 'Workout B' })).toBeInTheDocument();
+    await user.click(card('Squat').getByRole('button', { name: /^Set 1:/ }));
+    expect(screen.queryByRole('combobox', { name: 'Choose workout' })).not.toBeInTheDocument();
   });
 });
 
@@ -246,7 +248,7 @@ describe('Workout editor', () => {
   it('creates a custom exercise, adds it to workout A and logs it', async () => {
     const user = setup();
     await openEditor(user);
-    await user.click(screen.getByRole('button', { name: '+ Add exercise to workout A' }));
+    await user.click(screen.getByRole('button', { name: '+ Add exercise to Workout A' }));
     await user.click(screen.getByRole('button', { name: '+ Create new exercise' }));
     const sheet = within(screen.getByRole('dialog', { name: 'New exercise' }));
     await user.type(sheet.getByLabelText('Exercise name'), 'Dips');
@@ -275,37 +277,72 @@ describe('Workout editor', () => {
     await openEditor(user);
     await user.click(screen.getByRole('radio', { name: 'Workout B' }));
     await user.click(screen.getByRole('button', { name: 'Move Deadlift up' }));
-    await user.click(screen.getByRole('button', { name: 'Remove Overhead Press from workout B' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Overhead Press from Workout B' }));
     expect(editNames('B')).toEqual(['Edit Squat', 'Edit Deadlift']);
 
-    await user.click(screen.getByRole('button', { name: '+ Add exercise to workout B' }));
+    await user.click(screen.getByRole('button', { name: '+ Add exercise to Workout B' }));
     await user.click(screen.getByRole('button', { name: 'Add Barbell Row' }));
     expect(editNames('B')).toEqual(['Edit Squat', 'Edit Deadlift', 'Edit Barbell Row']);
 
     await user.click(screen.getByRole('button', { name: 'Workout' }));
-    await user.click(screen.getByRole('button', { name: 'Switch to B' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Choose workout' }), 'Workout B');
     const cards = screen.getAllByRole('region').filter(r => r.classList.contains('exercise-card'));
     expect(cards.map(r => r.getAttribute('aria-label'))).toEqual(['Squat', 'Deadlift', 'Barbell Row']);
   });
 
-  it('will not remove the last exercise in a workout', async () => {
+  it('adds, renames, reorders and deletes workouts', async () => {
     const user = setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await openEditor(user);
-    await user.click(screen.getByRole('button', { name: 'Remove Bench Press from workout A' }));
-    await user.click(screen.getByRole('button', { name: 'Remove Barbell Row from workout A' }));
-    expect(screen.getByRole('button', { name: 'Remove Squat from workout A' })).toBeDisabled();
+    expect(screen.getByText(/rotate in this order: Workout A → Workout B/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '+ Add workout' }));
+    expect(screen.getByRole('radio', { name: 'Workout C' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('No exercises yet.')).toBeInTheDocument();
+    const name = screen.getByLabelText('Workout name');
+    await user.clear(name);
+    await user.type(name, 'Arms');
+    await user.click(screen.getByRole('button', { name: '+ Add exercise to Arms' }));
+    await user.click(screen.getByRole('button', { name: 'Add Barbell Row' }));
+    await user.click(screen.getByRole('button', { name: 'Move Arms earlier' }));
+    expect(screen.getByText(/rotate in this order: Workout A → Arms → Workout B/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '+ Add workout' }));
+    await user.click(screen.getByRole('button', { name: '+ Add workout' }));
+    expect(screen.getByRole('button', { name: '+ Add workout' })).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: 'Workout A' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Workout A' }));
+    expect(screen.queryByRole('radio', { name: 'Workout A' })).not.toBeInTheDocument();
+
+    // Workout A was up next, so the one after it in the rotation takes its place.
+    await user.click(screen.getByRole('button', { name: 'Workout' }));
+    expect(screen.getByRole('heading', { name: 'Arms' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Arms', 'Workout B', 'Workout D', 'Workout E']);
+  });
+
+  it('runs a single workout without a picker', async () => {
+    const user = setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await openEditor(user);
+    await user.click(screen.getByRole('radio', { name: 'Workout B' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Workout B' }));
+    expect(screen.getByText('You do the same workout every session.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Delete Workout/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Workout' }));
+    expect(screen.queryByRole('combobox', { name: 'Choose workout' })).not.toBeInTheDocument();
   });
 
   it('deletes unused custom exercises but not built-in lifts', async () => {
     const user = setup();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await openEditor(user);
-    await user.click(screen.getByRole('button', { name: '+ Add exercise to workout A' }));
+    await user.click(screen.getByRole('button', { name: '+ Add exercise to Workout A' }));
     await user.click(screen.getByRole('button', { name: '+ Create new exercise' }));
     await user.type(screen.getByLabelText('Exercise name'), 'Curls');
     await user.click(screen.getByRole('button', { name: 'Add exercise' }));
-    await user.click(screen.getByRole('button', { name: 'Remove Curls from workout A' }));
-    await user.click(screen.getByRole('button', { name: '+ Add exercise to workout A' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Curls from Workout A' }));
+    await user.click(screen.getByRole('button', { name: '+ Add exercise to Workout A' }));
     await user.click(screen.getByRole('button', { name: 'Delete Curls' }));
     expect(screen.queryByRole('button', { name: 'Add Curls' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete Overhead Press' })).not.toBeInTheDocument();

@@ -209,3 +209,10 @@ input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .pick-list { list-style: none; }
 .pick-list li { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); }
 .pick-item { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 0; text-align: left; }
+
+/* Configurable workouts */
+.workout-picker { width: auto; max-width: 50%; padding: 6px 10px; flex-shrink: 1; min-width: 0; }
+.segmented.wrap { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 12px; }
+.segmented.wrap button { flex: 1 1 auto; padding: 6px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.workout-meta { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+.workout-meta .input { flex: 1; min-width: 0; padding: 8px 10px; }

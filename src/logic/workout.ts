@@ -9,7 +9,7 @@ import type {
   Workout,
   WorkoutType,
 } from '../types';
-import { startWeight } from './program';
+import { findWorkoutDef, nextWorkoutId, startWeight } from './program';
 import { roundLoadable, roundTo } from './weights';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,15 +33,18 @@ export function roundForExercise(
   return Math.max(0, roundTo(value, increment > 0 ? increment : 1));
 }
 
+/** A fresh session of workout `type` (the first workout if `type` is no longer in the program). */
 export function createWorkout(type: WorkoutType, state: ProgramState): Workout {
   const { program, exercises, lifts, settings } = state;
+  const def = findWorkoutDef(program, type) ?? program[0];
   return {
     id: newId(),
-    type,
+    type: def.id,
+    name: def.name,
     unit: settings.unit,
     startedAt: null,
     finishedAt: null,
-    exercises: program[type]
+    exercises: def.exercises
       .filter(id => exercises[id])
       .map(id => {
         const def = exercises[id];
@@ -159,7 +162,7 @@ export function finishWorkout(state: AppState, now: number): AppState {
     finishedAt: now,
     rest: null,
   };
-  const nextType: WorkoutType = current.type === 'A' ? 'B' : 'A';
+  const nextType = nextWorkoutId(state.program, current.type);
   return {
     ...state,
     lifts,

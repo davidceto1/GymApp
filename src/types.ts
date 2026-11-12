@@ -1,7 +1,8 @@
 export type Unit = 'kg' | 'lb';
 /** Built-in lifts use 'squat' | 'bench' | 'row' | 'ohp' | 'deadlift'; custom ones get generated ids. */
 export type ExerciseId = string;
-export type WorkoutType = 'A' | 'B';
+/** Id of a workout in the program ('A'–'E'); stays fixed when the workout is renamed. */
+export type WorkoutType = string;
 /** Barbell lifts get warmups, plate math and plate-rounded deloads. */
 export type Equipment = 'barbell' | 'other';
 
@@ -20,6 +21,14 @@ export interface ExerciseDef {
   /** Weight added once every set reaches the top of the range. */
   increment: number;
   equipment: Equipment;
+}
+
+/** One workout in the rotation. */
+export interface WorkoutDef {
+  id: WorkoutType;
+  name: string;
+  /** Exercise order. */
+  exercises: ExerciseId[];
 }
 
 export interface Settings {
@@ -72,6 +81,8 @@ export interface RestState {
 export interface Workout {
   id: string;
   type: WorkoutType;
+  /** Snapshot of the workout's name; absent on older workouts (shown as "Workout <type>"). */
+  name?: string;
   unit: Unit;
   /** Epoch ms of the first logged set. */
   startedAt: number | null;
@@ -89,8 +100,8 @@ export interface AppState {
   settings: Settings;
   /** Exercise library: every exercise the user can put in a workout. */
   exercises: Record<ExerciseId, ExerciseDef>;
-  /** Exercise order for each workout. */
-  program: Record<WorkoutType, ExerciseId[]>;
+  /** The workouts in rotation order (1–5). */
+  program: WorkoutDef[];
   lifts: Record<ExerciseId, LiftState>;
   nextType: WorkoutType;
   /** Finished workouts, newest first. */

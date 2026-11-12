@@ -2,7 +2,7 @@ import { useState, type Dispatch } from 'react';
 import type { AppState, Workout } from '../types';
 import type { Action } from '../state/reducer';
 import { formatWeight } from '../logic/weights';
-import { formatTarget } from '../logic/program';
+import { formatTarget, workoutLabel } from '../logic/program';
 import { exerciseOutcome, setMin } from '../logic/workout';
 import { formatClock, formatDate, formatLoad } from './format';
 
@@ -24,7 +24,7 @@ function WorkoutCard({ workout, onDelete }: { workout: Workout; onDelete: () => 
         </span>
         <span className="history-body">
           <span className="history-title">
-            Workout {workout.type}
+            {workoutLabel(workout)}
             {duration != null && duration > 0 && <span className="muted small"> · {formatClock(duration)}</span>}
           </span>
           {workout.exercises.map(ex => {

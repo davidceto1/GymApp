@@ -1,4 +1,4 @@
-import type { ExerciseDef, ExerciseId, LiftState, Settings, Unit, WorkoutType } from '../types';
+import type { ExerciseDef, ExerciseId, LiftState, Settings, Unit, Workout, WorkoutDef, WorkoutType } from '../types';
 
 export const BUILT_IN_IDS = ['squat', 'bench', 'row', 'ohp', 'deadlift'] as const;
 
@@ -10,10 +10,47 @@ const BUILT_IN_NAMES: Record<string, string> = {
   deadlift: 'Deadlift',
 };
 
-export const DEFAULT_PROGRAM: Record<WorkoutType, ExerciseId[]> = {
-  A: ['squat', 'bench', 'row'],
-  B: ['squat', 'ohp', 'deadlift'],
-};
+/** Workout ids, in the order new workouts get them. */
+export const WORKOUT_IDS = ['A', 'B', 'C', 'D', 'E'] as const;
+export const MAX_WORKOUTS = WORKOUT_IDS.length;
+
+/** StrongLifts: Workout A and Workout B, alternating. */
+export function defaultProgram(): WorkoutDef[] {
+  return [
+    { id: 'A', name: 'Workout A', exercises: ['squat', 'bench', 'row'] },
+    { id: 'B', name: 'Workout B', exercises: ['squat', 'ohp', 'deadlift'] },
+  ];
+}
+
+export function findWorkoutDef(program: WorkoutDef[], id: WorkoutType): WorkoutDef | undefined {
+  return program.find(w => w.id === id);
+}
+
+/** The workout after `id` in the rotation (wrapping); the first one if `id` isn't in the program. */
+export function nextWorkoutId(program: WorkoutDef[], id: WorkoutType): WorkoutType {
+  const i = program.findIndex(w => w.id === id);
+  return program[(i + 1) % program.length].id;
+}
+
+/** First id in A–E that no workout uses yet, or null when the program is full. */
+export function unusedWorkoutId(program: WorkoutDef[]): WorkoutType | null {
+  return WORKOUT_IDS.find(id => !program.some(w => w.id === id)) ?? null;
+}
+
+/** Display name of a logged or in-progress workout. */
+export function workoutLabel(w: Pick<Workout, 'type' | 'name'>): string {
+  return w.name?.trim() || `Workout ${w.type}`;
+}
+
+/** Name of a workout in the program by id. */
+export function workoutDefName(program: WorkoutDef[], id: WorkoutType): string {
+  return findWorkoutDef(program, id)?.name.trim() || `Workout ${id}`;
+}
+
+/** Ids of every exercise used by any workout in the program. */
+export function programExerciseIds(program: WorkoutDef[]): Set<ExerciseId> {
+  return new Set(program.flatMap(w => w.exercises));
+}
 
 export const REPS_PER_SET = 5;
 

@@ -1,5 +1,14 @@
-import type { AppState, ExerciseDef, Workout } from '../types';
-import { BUILT_IN_IDS, DEFAULT_PROGRAM, builtInName, defaultExercises, defaultSettings } from '../logic/program';
+import type { AppState, ExerciseDef, Workout, WorkoutDef } from '../types';
+import {
+  BUILT_IN_IDS,
+  MAX_WORKOUTS,
+  builtInName,
+  defaultExercises,
+  defaultProgram,
+  defaultSettings,
+  findWorkoutDef,
+  workoutLabel,
+} from '../logic/program';
 import { formatWeight } from '../logic/weights';
 import { initialState } from './reducer';
 
@@ -15,7 +24,9 @@ function isWorkout(v: unknown): boolean {
   return (
     isObject(v) &&
     typeof v.id === 'string' &&
-    (v.type === 'A' || v.type === 'B') &&
+    typeof v.type === 'string' &&
+    v.type !== '' &&
+    (v.name === undefined || v.name === null || typeof v.name === 'string') &&
     Array.isArray(v.exercises) &&
     v.exercises.every(
       e => isObject(e) && typeof e.id === 'string' && typeof e.weight === 'number' && Array.isArray(e.sets),
@@ -25,8 +36,10 @@ function isWorkout(v: unknown): boolean {
 
 /** Fill in fields added after a workout was saved (name/equipment snapshots). */
 function upgradeWorkout(w: Obj, exercises: Record<string, ExerciseDef>): Workout {
+  const workout = { ...(w as unknown as Workout) };
+  if (typeof w.name !== 'string') delete workout.name;
   return {
-    ...(w as unknown as Workout),
+    ...workout,
     exercises: (w.exercises as Obj[]).map(e => ({
       ...(e as unknown as Workout['exercises'][number]),
       name: typeof e.name === 'string' ? e.name : exercises[e.id as string]?.name ?? builtInName(e.id as string),
@@ -53,8 +66,33 @@ function migrateV1(raw: Obj): Obj {
     version: 2,
     settings: rest,
     exercises,
-    program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
+    program: defaultProgram(),
   };
+}
+
+/**
+ * The program as a list of 1–5 workouts. Data saved before workouts were configurable
+ * stores it as `{ A: [...ids], B: [...ids] }`.
+ */
+function parseProgram(program: unknown, exercises: Record<string, ExerciseDef>): WorkoutDef[] | null {
+  const list: unknown[] | null = Array.isArray(program)
+    ? program
+    : isObject(program)
+      ? (['A', 'B'] as const).map(id => ({ id, name: `Workout ${id}`, exercises: program[id] }))
+      : null;
+  if (!list || list.length < 1 || list.length > MAX_WORKOUTS) return null;
+  const ok = list.every(
+    w =>
+      isObject(w) &&
+      typeof w.id === 'string' &&
+      w.id !== '' &&
+      typeof w.name === 'string' &&
+      Array.isArray(w.exercises) &&
+      w.exercises.every(id => typeof id === 'string' && exercises[id]),
+  );
+  const ids = list.map(w => (w as Obj).id);
+  if (!ok || new Set(ids).size !== ids.length) return null;
+  return (list as Obj[]).map(w => ({ id: w.id as string, name: w.name as string, exercises: [...(w.exercises as string[])] }));
 }
 
 /** Validate untrusted data (localStorage or an imported backup) and upgrade old versions. */
@@ -77,13 +115,8 @@ export function parseState(input: unknown): AppState {
       return [id, { ...(d as unknown as ExerciseDef), minReps: min, timed: d.timed === true, perSide: d.perSide === true }];
     }),
   );
-  const program = raw.program;
-  if (
-    !isObject(program) ||
-    !(['A', 'B'] as const).every(t => Array.isArray(program[t]) && (program[t] as unknown[]).length > 0 && (program[t] as unknown[]).every(id => typeof id === 'string' && exercises[id as string]))
-  ) {
-    throw new Error('Backup workouts are malformed.');
-  }
+  const program = parseProgram(raw.program, exercises);
+  if (!program) throw new Error('Backup workouts are malformed.');
   if (!isObject(raw.lifts) || !Object.values(raw.lifts).every(l => isObject(l) && typeof l.weight === 'number')) {
     throw new Error('Backup is missing lift data.');
   }
@@ -93,14 +126,21 @@ export function parseState(input: unknown): AppState {
   if (!isWorkout(raw.current)) throw new Error('Backup current workout is malformed.');
 
   const unit = isObject(raw.settings) && raw.settings.unit === 'lb' ? 'lb' : 'kg';
+  const current = upgradeWorkout(raw.current as Obj, exercises);
+  const currentDef = findWorkoutDef(program, current.type);
+  if (current.name === undefined && currentDef) current.name = currentDef.name;
+  const nextType =
+    typeof raw.nextType === 'string' && findWorkoutDef(program, raw.nextType) ? raw.nextType : (currentDef ?? program[0]).id;
   return {
     ...(raw as unknown as AppState),
     version: 2,
     // Fill in any settings added after the backup was made.
     settings: { ...defaultSettings(unit), ...(isObject(raw.settings) ? raw.settings : {}) },
     exercises,
+    program,
+    nextType,
     history: (raw.history as Obj[]).map(w => upgradeWorkout(w, exercises)),
-    current: upgradeWorkout(raw.current as Obj, exercises),
+    current,
   };
 }
 
@@ -133,7 +173,7 @@ export function historyToCsv(history: Workout[]): string {
     for (const ex of w.exercises) {
       rows.push([
         date,
-        w.type,
+        workoutLabel(w),
         ex.name,
         formatWeight(ex.weight),
         w.unit,

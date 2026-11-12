@@ -14,7 +14,7 @@ function round1(v: number): number {
 /** Exercises in the current program first, then anything else that appears in history. */
 function chartableExercises(state: AppState): { id: ExerciseId; name: string }[] {
   const names = new Map<ExerciseId, string>();
-  for (const id of [...state.program.A, ...state.program.B]) {
+  for (const id of state.program.flatMap(w => w.exercises)) {
     if (state.exercises[id]) names.set(id, state.exercises[id].name);
   }
   for (const w of state.history) {

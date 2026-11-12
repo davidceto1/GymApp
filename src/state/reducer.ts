@@ -1,12 +1,16 @@
-import type { AppState, ExerciseDef, ExerciseId, LiftState, Settings, Unit, Workout, WorkoutType } from '../types';
+import type { AppState, ExerciseDef, ExerciseId, LiftState, Settings, Unit, Workout, WorkoutDef, WorkoutType } from '../types';
 import {
   BUILT_IN_IDS,
-  DEFAULT_PROGRAM,
   defaultExercises,
   defaultLifts,
+  defaultProgram,
   defaultSettings,
+  findWorkoutDef,
+  nextWorkoutId,
+  programExerciseIds,
   startWeight,
   unitDefaults,
+  unusedWorkoutId,
 } from '../logic/program';
 import { convertWeight } from '../logic/weights';
 import {
@@ -28,7 +32,8 @@ export type Action =
   | { type: 'setBodyWeight'; bodyWeight: number | null }
   | { type: 'acceptBreakDeload'; percent: number }
   | { type: 'skipBreakDeload' }
-  | { type: 'switchWorkoutType' }
+  /** Do a different workout today (only before any set is logged). */
+  | { type: 'selectWorkout'; id: WorkoutType }
   | { type: 'resetCurrent' }
   | { type: 'finishWorkout'; now: number }
   | { type: 'dismissRest' }
@@ -40,6 +45,11 @@ export type Action =
   | { type: 'saveExercise'; exercise: ExerciseDef; weight?: number }
   | { type: 'deleteExercise'; id: ExerciseId }
   | { type: 'setProgram'; workout: WorkoutType; ids: ExerciseId[] }
+  /** Add an empty workout to the end of the rotation (up to five). */
+  | { type: 'addWorkout' }
+  | { type: 'renameWorkout'; id: WorkoutType; name: string }
+  | { type: 'moveWorkout'; id: WorkoutType; dir: -1 | 1 }
+  | { type: 'removeWorkout'; id: WorkoutType }
   | { type: 'applyPreset'; preset: Preset }
   | { type: 'import'; state: AppState }
   | { type: 'resetAll' };
@@ -49,12 +59,31 @@ export function initialState(unit: Unit = 'kg'): AppState {
     version: 2 as const,
     settings: defaultSettings(unit),
     exercises: defaultExercises(unit),
-    program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
+    program: defaultProgram(),
     lifts: defaultLifts(unit),
-    nextType: 'A' as const,
+    nextType: 'A',
     history: [],
   };
   return { ...base, current: createWorkout('A', base) };
+}
+
+/** Swap the not-yet-started workout for a fresh session of `type`, keeping today's note and body weight. */
+function startWorkout(state: AppState, type: WorkoutType): AppState {
+  const fresh = createWorkout(type, state);
+  return {
+    ...state,
+    nextType: fresh.type,
+    current: {
+      ...fresh,
+      note: state.current.note,
+      bodyWeight: state.current.bodyWeight,
+      breakDeloadHandled: state.current.breakDeloadHandled,
+    },
+  };
+}
+
+function mapWorkoutDef(state: AppState, id: WorkoutType, fn: (w: WorkoutDef) => WorkoutDef): AppState {
+  return { ...state, program: state.program.map(w => (w.id === id ? fn(w) : w)) };
 }
 
 function updateCurrent(state: AppState, fn: (w: Workout) => Workout): AppState {
@@ -64,9 +93,12 @@ function updateCurrent(state: AppState, fn: (w: Workout) => Workout): AppState {
 /** Rebuild the not-yet-started workout so it reflects new lifts/settings/program. */
 function refreshIfUntouched(state: AppState): AppState {
   if (hasLoggedSets(state.current)) return state;
-  const fresh = createWorkout(state.current.type, state);
+  // If the planned workout was removed from the program, fall back to the next one in rotation.
+  const type = findWorkoutDef(state.program, state.current.type) ? state.current.type : state.nextType;
+  const fresh = createWorkout(type, state);
   return {
     ...state,
+    nextType: fresh.type,
     current: {
       ...fresh,
       id: state.current.id,
@@ -141,29 +173,19 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'skipBreakDeload':
       return updateCurrent(state, w => ({ ...w, breakDeloadHandled: true }));
 
-    case 'switchWorkoutType': {
-      if (hasLoggedSets(state.current)) return state;
-      const type: WorkoutType = state.current.type === 'A' ? 'B' : 'A';
+    case 'selectWorkout':
+      if (hasLoggedSets(state.current) || !findWorkoutDef(state.program, action.id)) return state;
+      if (action.id === state.current.type) return state;
+      return startWorkout(state, action.id);
+
+    case 'resetCurrent': {
+      const fresh = createWorkout(state.current.type, state);
       return {
         ...state,
-        nextType: type,
-        current: {
-          ...createWorkout(type, state),
-          note: state.current.note,
-          bodyWeight: state.current.bodyWeight,
-          breakDeloadHandled: state.current.breakDeloadHandled,
-        },
+        nextType: fresh.type,
+        current: { ...fresh, breakDeloadHandled: state.current.breakDeloadHandled },
       };
     }
-
-    case 'resetCurrent':
-      return {
-        ...state,
-        current: {
-          ...createWorkout(state.current.type, state),
-          breakDeloadHandled: state.current.breakDeloadHandled,
-        },
-      };
 
     case 'finishWorkout':
       return finishWorkout(state, action.now);
@@ -228,7 +250,7 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'deleteExercise': {
-      if (state.program.A.includes(action.id) || state.program.B.includes(action.id)) return state;
+      if (programExerciseIds(state.program).has(action.id)) return state;
       const exercises = { ...state.exercises };
       const lifts = { ...state.lifts };
       delete exercises[action.id];
@@ -238,8 +260,33 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'setProgram': {
       const ids = action.ids.filter((id, i) => state.exercises[id] && action.ids.indexOf(id) === i);
-      if (ids.length === 0) return state;
-      return refreshIfUntouched({ ...state, program: { ...state.program, [action.workout]: ids } });
+      return refreshIfUntouched(mapWorkoutDef(state, action.workout, w => ({ ...w, exercises: ids })));
+    }
+
+    case 'addWorkout': {
+      const id = unusedWorkoutId(state.program);
+      if (!id) return state;
+      return { ...state, program: [...state.program, { id, name: `Workout ${id}`, exercises: [] }] };
+    }
+
+    case 'renameWorkout':
+      return refreshIfUntouched(mapWorkoutDef(state, action.id, w => ({ ...w, name: action.name.slice(0, 40) })));
+
+    case 'moveWorkout': {
+      const i = state.program.findIndex(w => w.id === action.id);
+      const j = i + action.dir;
+      if (i < 0 || j < 0 || j >= state.program.length) return state;
+      const program = [...state.program];
+      [program[i], program[j]] = [program[j], program[i]];
+      return { ...state, program };
+    }
+
+    case 'removeWorkout': {
+      if (state.program.length <= 1 || !findWorkoutDef(state.program, action.id)) return state;
+      const program = state.program.filter(w => w.id !== action.id);
+      // If it was up next, the workout after it in the rotation takes its place.
+      const nextType = state.nextType === action.id ? nextWorkoutId(state.program, action.id) : state.nextType;
+      return refreshIfUntouched({ ...state, program, nextType });
     }
 
     case 'applyPreset': {
@@ -254,12 +301,9 @@ export function reducer(state: AppState, action: Action): AppState {
         };
         lifts[id] ??= startLifts[id];
       }
-      return refreshIfUntouched({
-        ...state,
-        exercises,
-        lifts,
-        program: { A: [...DEFAULT_PROGRAM.A], B: [...DEFAULT_PROGRAM.B] },
-      });
+      const program = defaultProgram();
+      const nextType = findWorkoutDef(program, state.nextType) ? state.nextType : program[0].id;
+      return refreshIfUntouched({ ...state, exercises, lifts, program, nextType });
     }
 
     case 'import':
