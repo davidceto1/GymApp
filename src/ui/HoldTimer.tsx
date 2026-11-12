@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatClock } from './format';
 import { restAlert } from './alert';
 import { useNow } from './useNow';
+import { useWakeLock } from './useWakeLock';
 
 interface HoldTimerProps {
   /** Seconds at which to beep (e.g. the bottom and top of a hold range). */
@@ -20,6 +21,7 @@ export function HoldTimer({ marks, sound }: HoldTimerProps) {
   const [banked, setBanked] = useState(0);
   const running = startedAt != null;
   const now = useNow(running, 250);
+  useWakeLock(running);
   const elapsed = banked + (running ? Math.max(0, (now - startedAt) / 1000) : 0);
 
   const alerted = useRef(new Set<number>());
