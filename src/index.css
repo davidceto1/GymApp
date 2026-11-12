@@ -155,6 +155,23 @@ textarea.input { resize: vertical; }
 .history-detail .note { font-style: italic; color: var(--text-2); }
 .history-detail .btn { margin-top: 8px; }
 
+/* Workout summary */
+.summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.summary-stats div { display: flex; flex-direction: column; gap: 2px; }
+.summary-stats strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.summary-records { font-weight: 700; }
+.summary-exercise { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.summary-exercise:first-child { padding-top: 0; }
+.summary-exercise:last-child { border-bottom: 0; padding-bottom: 0; }
+.summary-exercise.skipped { opacity: 0.6; }
+.summary-exercise-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
+.summary-next { font-size: 13px; color: var(--text-2); }
+.summary-next.up { color: var(--good); font-weight: 600; }
+.summary-next.down { color: var(--accent); }
+.tag.record { background: var(--good-soft); color: var(--good); }
+.summary-screen .note { font-style: italic; color: var(--text-2); }
+.summary-done { width: 100%; margin: 4px 0 12px; }
+
 /* Progress */
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: none; }
 .chip { padding: 7px 14px; border-radius: 999px; background: var(--surface); font-size: 14px; font-weight: 600; white-space: nowrap; color: var(--text-2); }

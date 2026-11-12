@@ -24,6 +24,7 @@ async function completeAllSets(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   window.location.hash = '';
 });
 
@@ -51,16 +52,42 @@ describe('Workout screen', () => {
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
   });
 
-  it('finishing a full workout progresses weights and switches to B', async () => {
+  it('finishing a full workout shows a summary, then B with progressed weights', async () => {
     const user = setup();
     await completeAllSets(user);
     await user.click(screen.getByRole('button', { name: 'Finish workout' }));
+    expect(screen.getByRole('heading', { name: 'Workout A done' })).toBeInTheDocument();
+    const stats = within(screen.getByRole('region', { name: 'Workout stats' }));
+    expect(stats.getByText('15/15')).toBeInTheDocument();
+    const exercises = within(screen.getByRole('region', { name: 'Exercises' }));
+    expect(exercises.getByText('Squat').parentElement!.parentElement).toHaveTextContent('5 / 5 / 5 / 5 / 5Next: 22.5kg ↑');
+    // The first session of a lift sets no record.
+    expect(screen.queryByText(/PR/)).not.toBeInTheDocument();
+
+    // Survives a tab switch.
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await user.click(screen.getByRole('button', { name: 'Workout' }));
+    await user.click(screen.getByRole('button', { name: 'Start Workout B' }));
     expect(screen.getByRole('heading', { name: 'Workout B' })).toBeInTheDocument();
     expect(card('Squat').getByRole('button', { name: /weight/ })).toHaveTextContent('22.5kg');
     expect(card('Deadlift').getByRole('button', { name: /weight/ })).toHaveTextContent('1×5 40kg');
-    expect(screen.getByRole('status')).toHaveTextContent('Next up: Workout B');
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!) as AppState;
     expect(saved.history).toHaveLength(1);
+  });
+
+  it('flags a new weight record in the summary', async () => {
+    let s = initialState();
+    s = reducer(s, { type: 'tapSet', exercise: 0, set: 0, now: 0 });
+    s = reducer(s, { type: 'finishWorkout', now: 1 });
+    s = reducer(s, { type: 'selectWorkout', id: 'A' });
+    s = reducer(s, { type: 'setExerciseWeight', exercise: 0, weight: 25 });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    const user = setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(card('Squat').getByRole('button', { name: /^Set 1:/ }));
+    await user.click(screen.getByRole('button', { name: 'Finish early' }));
+    expect(screen.getByRole('status')).toHaveTextContent('New record!');
+    expect(screen.getByText('Weight PR (was 20kg)')).toBeInTheDocument();
   });
 
   it('asks before finishing an incomplete workout', async () => {

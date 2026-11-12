@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { reducer } from './state/reducer';
 import { loadState, saveState } from './state/storage';
 import { WorkoutScreen } from './ui/WorkoutScreen';
+import { WorkoutSummary } from './ui/WorkoutSummary';
 import { HistoryScreen } from './ui/HistoryScreen';
 import { ProgressScreen } from './ui/ProgressScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
@@ -22,9 +23,32 @@ function tabFromHash(): Tab {
   return TABS.some(t => t.id === h) ? (h as Tab) : 'workout';
 }
 
+const SUMMARY_KEY = 'gymapp-summary';
+
+function readSummaryId(): string | null {
+  try {
+    return sessionStorage.getItem(SUMMARY_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [state, dispatch] = useReducer(reducer, undefined, loadState);
   const [tab, setTab] = useState<Tab>(tabFromHash);
+  /** Workout just finished: the Workout tab shows its summary until dismissed. */
+  const [summaryId, setSummaryId] = useState<string | null>(readSummaryId);
+
+  useEffect(() => {
+    try {
+      if (summaryId) sessionStorage.setItem(SUMMARY_KEY, summaryId);
+      else sessionStorage.removeItem(SUMMARY_KEY);
+    } catch {
+      // Storage unavailable: the summary just won't survive a reload.
+    }
+  }, [summaryId]);
+
+  const showSummary = summaryId != null && state.history.some(w => w.id === summaryId);
 
   const cloud = useCloudSync(state, dispatch);
 
@@ -45,7 +69,9 @@ function App() {
   return (
     <div className="app">
       <main className="app-main">
-        {tab === 'workout' && <WorkoutScreen state={state} dispatch={dispatch} />}
+        {tab === 'workout' && (showSummary
+          ? <WorkoutSummary state={state} workoutId={summaryId!} onDone={() => { setSummaryId(null); window.scrollTo?.(0, 0); }} />
+          : <WorkoutScreen state={state} dispatch={dispatch} onFinished={id => { setSummaryId(id); window.scrollTo?.(0, 0); }} />)}
         {tab === 'history' && <HistoryScreen state={state} dispatch={dispatch} />}
         {tab === 'progress' && <ProgressScreen state={state} />}
         {tab === 'settings' && <SettingsScreen state={state} dispatch={dispatch} cloud={cloud} />}
