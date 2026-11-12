@@ -133,10 +133,22 @@ textarea.input { resize: vertical; }
 .app-bottom > * { pointer-events: auto; }
 .rest-timer { position: relative; overflow: hidden; width: calc(100% - 24px); max-width: 536px; margin-bottom: 8px; background: var(--surface-2); border-radius: var(--radius); padding: 10px 8px 10px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
 .rest-progress { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width 1s linear; }
-.rest-timer.done { background: var(--good-soft); }
+.rest-timer.done { background: linear-gradient(var(--good-soft), var(--good-soft)), var(--surface-2); }
 .rest-timer.done .rest-progress { background: var(--good); }
 .rest-clock { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 64px; }
 .rest-message { flex: 1; font-size: 13px; color: var(--text-2); }
+.hold-wrap { width: calc(100% - 24px); max-width: 536px; margin-bottom: 8px; display: flex; justify-content: flex-end; pointer-events: none; }
+.hold-wrap[hidden] { display: none; }
+.hold-wrap > * { pointer-events: auto; }
+.hold-fab { min-width: 52px; height: 52px; padding: 0 14px; border-radius: 26px; background: var(--surface-2); color: var(--text); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.hold-fab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hold-fab.running { background: var(--accent); color: var(--accent-ink); }
+.hold-fab-clock { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hold-timer { width: 100%; background: var(--surface-2); border-radius: var(--radius); padding: 10px 8px 10px 16px; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.hold-timer.hit { background: linear-gradient(var(--good-soft), var(--good-soft)), var(--surface-2); }
+.hold-info { display: flex; flex-direction: column; margin-right: auto; }
+.hold-clock { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hold-toggle { min-width: 76px; }
 .tab-bar { width: 100%; height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--border); display: flex; justify-content: center; }
 .tab-bar button { flex: 1; max-width: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .tab-bar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
