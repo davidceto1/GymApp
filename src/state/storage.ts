@@ -154,6 +154,22 @@ export function loadState(): AppState {
   return initialState();
 }
 
+/**
+ * The state another open copy of the app (tab, or installed app + browser tab) saved after this
+ * one last saved, or null if storage still holds exactly `state`. Copies share localStorage
+ * (including the sync snapshot) but each keeps its own state in memory, so a copy that is behind
+ * must adopt the stored state instead of uploading its own stale version.
+ */
+export function newerStoredState(state: AppState): AppState | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored || stored === JSON.stringify(state)) return null;
+    return parseState(JSON.parse(stored));
+  } catch {
+    return null;
+  }
+}
+
 export function saveState(state: AppState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
