@@ -173,6 +173,60 @@ export function diffRows(prev: Rows | null, next: Rows): RowDiff {
   };
 }
 
+/** user_state columns compared per key, so two devices editing different keys both win. */
+const KEYED_FIELDS = ['settings', 'lifts'] as const;
+/** user_state columns compared as a whole. */
+const WHOLE_FIELDS = ['program', 'next_type', 'current'] as const;
+
+export interface UserStateMerge {
+  /** Columns to write (only those this device changed), or null if nothing to write. */
+  write: Partial<UserStateRow> | null;
+  /**
+   * What to record as last synced: this device's values where it changed something, the old base
+   * elsewhere. Remote changes this device hasn't pulled yet then don't look like local edits on
+   * the next push, so they aren't overwritten before the next pull brings them in.
+   */
+  snapshot: UserStateRow;
+}
+
+/**
+ * Three-way merge of the single user_state row. `base` is what this device last synced, `ours` is
+ * local state, `theirs` is the cloud row right now. Only fields (or settings/lifts keys) this device
+ * changed since `base` are written, so another device's edits (e.g. a new workout and its lifts) survive.
+ */
+export function mergeUserState(base: UserStateRow, ours: UserStateRow, theirs: UserStateRow): UserStateMerge {
+  const write: Partial<UserStateRow> = {};
+  const snapshot = { ...base } as Record<string, unknown>;
+  const out = write as Record<string, unknown>;
+
+  for (const f of WHOLE_FIELDS) {
+    if (!same(base[f], ours[f])) {
+      out[f] = ours[f];
+      snapshot[f] = ours[f];
+    }
+  }
+  for (const f of KEYED_FIELDS) {
+    const b = base[f] as Record<string, unknown>;
+    const o = ours[f] as Record<string, unknown>;
+    const changed = [...new Set([...Object.keys(b), ...Object.keys(o)])].filter(k => !same(b[k], o[k]));
+    if (!changed.length) continue;
+    const merged = { ...(theirs[f] as Record<string, unknown>) };
+    const snap = { ...b };
+    for (const k of changed) {
+      if (k in o) {
+        merged[k] = o[k];
+        snap[k] = o[k];
+      } else {
+        delete merged[k];
+        delete snap[k];
+      }
+    }
+    out[f] = merged;
+    snapshot[f] = snap;
+  }
+  return { write: Object.keys(write).length ? write : null, snapshot: snapshot as unknown as UserStateRow };
+}
+
 export function isEmptyDiff(d: RowDiff): boolean {
   return !d.userState && !d.upsertExercises.length && !d.deleteExercises.length && !d.upsertWorkouts.length && !d.deleteWorkouts.length;
 }

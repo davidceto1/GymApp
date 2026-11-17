@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { initialState, reducer } from '../state/reducer';
 import type { AppState } from '../types';
-import { diffRows, isEmptyDiff, mergeHistory, rowsToState, stateToRows } from './rows';
+import { diffRows, isEmptyDiff, mergeHistory, mergeUserState, rowsToState, stateToRows } from './rows';
 
 function withWorkouts(n: number, base: AppState = initialState()): AppState {
   let s = base;
@@ -100,5 +100,41 @@ describe('cloud rows', () => {
     const merged = mergeHistory(remote, local);
     expect(merged.history).toHaveLength(3);
     expect(merged.settings).toBe(remote.settings);
+  });
+
+  it("doesn't let a device with an older copy wipe out a workout added elsewhere", () => {
+    // Both devices start from the same synced state.
+    const base = withWorkouts(1);
+    const baseRow = stateToRows(base).userState;
+
+    // Desktop adds Workout C and a lift weight for its exercise; that reaches the cloud.
+    let desktop = reducer(base, { type: 'addWorkout' });
+    desktop = reducer(desktop, { type: 'setProgram', workout: 'C', ids: ['row'] });
+    desktop = reducer(desktop, { type: 'setLift', id: 'curl', lift: { weight: 15 } });
+    const cloud = stateToRows(desktop).userState;
+
+    // The phone, still on the old copy, logs a set and changes another lift.
+    let phone = reducer(base, { type: 'tapSet', exercise: 0, set: 0, now: 1_800_000_000_000 });
+    phone = reducer(phone, { type: 'setLift', id: 'bench', lift: { weight: 99 } });
+    const ours = stateToRows(phone).userState;
+
+    const { write, snapshot } = mergeUserState(baseRow, ours, cloud);
+    expect(write).not.toHaveProperty('program');
+    expect(write?.current).toEqual(ours.current);
+    expect(write?.lifts?.curl).toEqual({ weight: 15, failures: 0 });
+    expect(write?.lifts?.bench).toEqual(ours.lifts.bench);
+
+    // The cloud row after the write keeps Workout C and both lift changes.
+    const after = { ...cloud, ...write };
+    expect(after.program.map(w => w.id)).toEqual(['A', 'B', 'C']);
+
+    // The phone's next push must not see the stale program as a local edit.
+    expect(snapshot.program).toEqual(baseRow.program);
+    expect(mergeUserState(snapshot, ours, after).write).toBeNull();
+  });
+
+  it('writes nothing for user_state fields this device did not change', () => {
+    const row = stateToRows(withWorkouts(1)).userState;
+    expect(mergeUserState(row, row, { ...row, next_type: 'B' }).write).toBeNull();
   });
 });

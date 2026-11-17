@@ -4,6 +4,7 @@ import {
   diffRows,
   isEmptyDiff,
   mergeHistory,
+  mergeUserState,
   rowsToState,
   stateToRows,
   type ExerciseRow,
@@ -57,18 +58,45 @@ function check<T>({ data, error }: { data: T; error: { message: string } | null 
   return data;
 }
 
-async function pushDiff(db: SupabaseClient, userId: string, diff: RowDiff) {
+const USER_STATE_COLUMNS = 'settings, program, lifts, next_type, current';
+
+/**
+ * Write `diff` to the cloud. `base` is the user_state this device last synced (null = none).
+ * Returns the user_state to record as synced (see mergeUserState).
+ */
+async function pushDiff(
+  db: SupabaseClient,
+  userId: string,
+  diff: RowDiff,
+  base: UserStateRow | null,
+): Promise<UserStateRow | null> {
   const own = <T extends object>(rows: T[]) => rows.map(r => ({ ...r, user_id: userId }));
   // Parents/additions first, removals last, so a failure part-way never loses data.
   if (diff.upsertExercises.length) check(await db.from('exercises').upsert(own(diff.upsertExercises)));
   if (diff.upsertWorkouts.length) check(await db.from('workouts').upsert(own(diff.upsertWorkouts)));
-  if (diff.userState) check(await db.from('user_state').upsert({ ...diff.userState, user_id: userId }));
+  let synced = diff.userState;
+  if (diff.userState) {
+    // user_state is one row shared by every device: only write the parts this device changed,
+    // or a device with an older copy (e.g. a workout left open on a phone) would wipe out
+    // edits made elsewhere, like a newly added workout.
+    const theirs = base
+      ? (check(await db.from('user_state').select(USER_STATE_COLUMNS).eq('user_id', userId).maybeSingle()) as UserStateRow | null)
+      : null;
+    if (base && theirs) {
+      const merge = mergeUserState(base, diff.userState, theirs);
+      if (merge.write) check(await db.from('user_state').update(merge.write).eq('user_id', userId));
+      synced = merge.snapshot;
+    } else {
+      check(await db.from('user_state').upsert({ ...diff.userState, user_id: userId }));
+    }
+  }
   if (diff.deleteWorkouts.length) {
     check(await db.from('workouts').delete().eq('user_id', userId).in('id', diff.deleteWorkouts));
   }
   if (diff.deleteExercises.length) {
     check(await db.from('exercises').delete().eq('user_id', userId).in('id', diff.deleteExercises));
   }
+  return synced;
 }
 
 /** Upload local changes since the last sync. Returns false when this device has never synced. */
@@ -78,8 +106,8 @@ export async function push(db: SupabaseClient, userId: string, state: AppState):
   const next = stateToRows(state);
   const diff = diffRows(snapshot, next);
   if (!isEmptyDiff(diff)) {
-    await pushDiff(db, userId, diff);
-    saveSnapshot(userId, next);
+    const userState = await pushDiff(db, userId, diff, snapshot.userState);
+    saveSnapshot(userId, { ...next, userState: userState ?? next.userState });
   }
   return true;
 }
@@ -92,7 +120,7 @@ export async function sync(db: SupabaseClient, userId: string, local: AppState):
   const hadSnapshot = await push(db, userId, local);
 
   const [us, ex, wo] = await Promise.all([
-    db.from('user_state').select('settings, program, lifts, next_type, current').eq('user_id', userId).maybeSingle(),
+    db.from('user_state').select(USER_STATE_COLUMNS).eq('user_id', userId).maybeSingle(),
     db.from('exercises').select('id, name, sets, reps, min_reps, timed, per_side, increment, equipment').eq('user_id', userId),
     db.from('workouts').select('id, type, name, unit, started_at, finished_at, exercises, note, body_weight').eq('user_id', userId),
   ]);
@@ -103,7 +131,7 @@ export async function sync(db: SupabaseClient, userId: string, local: AppState):
   if (!userState) {
     // Cloud is empty (first sign-in ever): upload everything from this device.
     const rows = stateToRows(local);
-    await pushDiff(db, userId, diffRows(null, rows));
+    await pushDiff(db, userId, diffRows(null, rows), null);
     saveSnapshot(userId, rows);
     return null;
   }
@@ -115,7 +143,7 @@ export async function sync(db: SupabaseClient, userId: string, local: AppState):
     // (unless they belong to a different account that synced from this device before).
     remote = mergeHistory(remote, local);
     const cloudRows = stateToRows(rowsToState(userState, exercises, workouts));
-    await pushDiff(db, userId, diffRows(cloudRows, stateToRows(remote)));
+    await pushDiff(db, userId, diffRows(cloudRows, stateToRows(remote)), cloudRows.userState);
   }
   // The caller calls markSynced() once it has switched to `remote`. If it can't (the user changed
   // something meanwhile), the old snapshot stays, so the next push sends only those local edits
