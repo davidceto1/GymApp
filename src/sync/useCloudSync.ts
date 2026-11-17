@@ -5,6 +5,7 @@ import type { Action } from '../state/reducer';
 import { supabase } from './supabase';
 import { markSynced, push, sync } from './cloud';
 import { newerVersionAvailable } from './appVersion';
+import { STORAGE_KEY, newerStoredState } from '../state/storage';
 
 export type SyncStatus = 'disabled' | 'signedOut' | 'syncing' | 'synced' | 'offline' | 'error';
 
@@ -61,8 +62,17 @@ export function useCloudSync(state: AppState, dispatch: Dispatch<Action>): Cloud
     setLastSyncedAt(Date.now());
   }, []);
 
+  /** If another open copy of the app saved newer state, switch to it instead of syncing ours. */
+  const adoptNewerCopy = useCallback(() => {
+    const newer = newerStoredState(stateRef.current);
+    if (!newer) return;
+    stateRef.current = newer; // Sync this right away, not the stale copy.
+    dispatch({ type: 'import', state: newer });
+  }, [dispatch]);
+
   const pushLatest = useCallback(async () => {
     if (!supabase || !userId || !ready.current || busy.current) return;
+    adoptNewerCopy();
     busy.current = true;
     try {
       await push(supabase, userId, stateRef.current);
@@ -72,10 +82,11 @@ export function useCloudSync(state: AppState, dispatch: Dispatch<Action>): Cloud
     } finally {
       busy.current = false;
     }
-  }, [userId, succeed, fail]);
+  }, [userId, succeed, fail, adoptNewerCopy]);
 
   const fullSync = useCallback(async () => {
     if (!supabase || !userId || busy.current) return;
+    adoptNewerCopy();
     busy.current = true;
     setStatus('syncing');
     const before = stateRef.current;
@@ -94,7 +105,14 @@ export function useCloudSync(state: AppState, dispatch: Dispatch<Action>): Cloud
     }
     // Upload anything changed while we were syncing.
     if (stateRef.current !== before) void pushLatest();
-  }, [userId, dispatch, succeed, fail, pushLatest]);
+  }, [userId, dispatch, succeed, fail, pushLatest, adoptNewerCopy]);
+
+  // Another open copy of the app saved: show the same data here, so this copy never syncs a stale one.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => e.key === STORAGE_KEY && adoptNewerCopy();
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [adoptNewerCopy]);
 
   // Full sync on sign-in / app start, when coming back online, and when the app is reopened.
   useEffect(() => {

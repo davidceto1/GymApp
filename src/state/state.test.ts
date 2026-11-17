@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initialState, reducer, type Action } from './reducer';
-import { STORAGE_KEY, historyToCsv, loadState, parseState, saveState } from './storage';
+import { STORAGE_KEY, historyToCsv, loadState, newerStoredState, parseState, saveState } from './storage';
 import type { AppState, ExerciseDef } from '../types';
 
 function run(state: AppState, ...actions: Action[]): AppState {
@@ -349,5 +349,36 @@ describe('storage', () => {
     expect(lines[0]).toBe('Date,Workout,Exercise,Weight,Unit,Reps,Body Weight,Note');
     expect(lines[1]).toBe('2026-01-02,Workout A,Squat,20,kg,5/5/5/5/5,,"heavy, ""tough"""');
     expect(lines).toHaveLength(4);
+  });
+});
+
+describe('several open copies of the app', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('finds state another copy saved after this one', () => {
+    const stale = initialState();
+    saveState(stale);
+    expect(newerStoredState(stale)).toBeNull();
+
+    // The other copy adds Workout C and saves.
+    const other = run(stale, { type: 'addWorkout' });
+    saveState(other);
+    expect(newerStoredState(stale)?.program.map(w => w.id)).toEqual(['A', 'B', 'C']);
+    expect(newerStoredState(other)).toBeNull();
+  });
+
+  it('settles after one round, so copies never keep re-saving each other', () => {
+    const other = run(initialState(), { type: 'addWorkout' });
+    saveState(other);
+    const adopted = newerStoredState(initialState())!;
+    saveState(adopted);
+    expect(newerStoredState(adopted)).toBeNull();
+    expect(JSON.stringify(parseState(JSON.parse(JSON.stringify(adopted))))).toBe(JSON.stringify(adopted));
+  });
+
+  it('ignores missing or unreadable storage', () => {
+    expect(newerStoredState(initialState())).toBeNull();
+    localStorage.setItem(STORAGE_KEY, '{bad');
+    expect(newerStoredState(initialState())).toBeNull();
   });
 });
