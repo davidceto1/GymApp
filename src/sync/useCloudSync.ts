@@ -4,6 +4,7 @@ import type { AppState } from '../types';
 import type { Action } from '../state/reducer';
 import { supabase } from './supabase';
 import { markSynced, push, sync } from './cloud';
+import { newerVersionAvailable } from './appVersion';
 
 export type SyncStatus = 'disabled' | 'signedOut' | 'syncing' | 'synced' | 'offline' | 'error';
 
@@ -100,8 +101,14 @@ export function useCloudSync(state: AppState, dispatch: Dispatch<Action>): Cloud
     ready.current = false;
     if (!userId) return;
     void fullSync();
-    const onVisible = () => document.visibilityState === 'visible' && void fullSync();
-    const onOnline = () => void fullSync();
+    // A newer deploy reloads the page first: local state is saved, so the fresh code pushes
+    // any pending edits. An outdated copy left open for days must not keep syncing.
+    const syncOrUpdate = async () => {
+      if (await newerVersionAvailable()) window.location.reload();
+      else void fullSync();
+    };
+    const onVisible = () => document.visibilityState === 'visible' && void syncOrUpdate();
+    const onOnline = () => void syncOrUpdate();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     return () => {
